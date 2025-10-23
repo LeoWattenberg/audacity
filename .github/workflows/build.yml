@@ -192,7 +192,7 @@ jobs:
       uses: audacity/audacity-actions/dependencies@v4
       with:
         force_gcc11: ${{ matrix.config.force_gcc11 }}
-    - name: Configure
+    - name: Configure with asio
       uses: audacity/audacity-actions/configure@v4
       with:
         generator: ${{ matrix.config.generator }}
