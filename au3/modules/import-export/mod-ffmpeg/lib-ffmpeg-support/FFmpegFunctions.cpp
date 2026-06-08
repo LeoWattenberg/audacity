@@ -129,10 +129,15 @@ std::vector<wxString> BuildAVFormatPaths(int version)
 #elif defined(__WXMAC__)
         wxString::Format("libavformat.%d.dylib", version),
         wxString::Format("ffmpeg.%d.64bit.dylib", version),
-#elif defined(__OpenBSD__)
-        wxString::Format("libavformat.so"),
 #else
+        // Linux and other Unix-like systems:
+        // Try versioned library first (e.g., libavformat.so.61)
         wxString::Format("libavformat.so.%d", version),
+        // Also try unversioned library (e.g., libavformat.so)
+        // This is important for systems like Fedora where only unversioned
+        // symlinks may be available, or where users manually select versioned
+        // libraries that should be discovered via LD_LIBRARY_PATH
+        wxString("libavformat.so"),
 #endif
     };
 }
