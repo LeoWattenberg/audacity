@@ -125,7 +125,19 @@ bool SetFFmpegPath(const wxString& path)
     SettingTransaction transaction;
 
     auto normalizeFFmpegPath = [](const wxString& input) -> wxString {
-        return wxDirExists(input) ? input : wxPathOnly(input);
+        // If input is a directory, use it as-is
+        if (wxDirExists(input)) {
+            return input;
+        }
+        
+        // If input is a file (e.g., /lib64/libavformat.so.61), extract the directory
+        wxString dir = wxPathOnly(input);
+        if (!dir.empty() && wxDirExists(dir)) {
+            return dir;
+        }
+        
+        // Fallback to the original path
+        return input;
     };
 
     AVFormatPath.Write(normalizeFFmpegPath(path));
