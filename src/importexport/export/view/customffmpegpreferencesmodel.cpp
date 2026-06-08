@@ -178,8 +178,7 @@ void CustomFFmpegPreferencesModel::locateFFmpegLibrary()
     }
 
     std::string libFileName = avformatString().toStdString();
-    const std::string filter
-        =libFileName.replace(libFileName.find('.'), 0, "*");
+    const std::string filter = libFileName.replace(libFileName.find('.'), 0, "*") + "*";
     muse::io::path_t directory = interactive()->selectOpeningFileSync(muse::qtrc("preferences",
                                                                                  "Locate %1").arg(
                                                                           libFileName).toStdString(), initialPath, { filter });
