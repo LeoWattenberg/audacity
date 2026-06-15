@@ -50,6 +50,22 @@ static const ActionCode PLAYBACK_BPM("playback-bpm");
 static const ActionCode PLAYBACK_TIME_SIGNATURE("playback-time-signature");
 
 static const ActionCode SNAP_ACTION_CODE("snap");
+static const ActionCode FILE_SAVE_ACTION_CODE("file-save");
+static const ActionCode EXPORT_AUDIO_ACTION_CODE("export-audio");
+static const ActionCode FILE_SAVE_TO_CLOUD_ACTION_CODE("file-save-to-cloud");
+static const ActionCode FILE_SHARE_AUDIO_ACTION_CODE("file-share-audio");
+static const ActionCode FILE_OPEN_ACTION_CODE("file-open");
+static const ActionCode PROJECT_IMPORT_ACTION_CODE("project-import");
+
+static bool isFileAction(const ActionCode& actionCode)
+{
+    return actionCode == FILE_SAVE_ACTION_CODE
+           || actionCode == EXPORT_AUDIO_ACTION_CODE
+           || actionCode == FILE_SAVE_TO_CLOUD_ACTION_CODE
+           || actionCode == FILE_SHARE_AUDIO_ACTION_CODE
+           || actionCode == FILE_OPEN_ACTION_CODE
+           || actionCode == PROJECT_IMPORT_ACTION_CODE;
+}
 
 static PlaybackToolBarModel::ItemType itemType(const ActionCode& actionCode)
 {
@@ -83,6 +99,10 @@ void PlaybackToolBarModel::load()
 {
     if (!m_inited) {
         uiState()->toolConfigChanged(TOOLBAR_NAME).onNotify(this, [this]() {
+            reload();
+        });
+
+        uiActionsRegister()->actionsChanged().onReceive(this, [this](const UiActionList&) {
             reload();
         });
 
@@ -343,34 +363,40 @@ void PlaybackToolBarModel::updateActions()
 
     muse::ui::ToolConfig playbackConfig = uiState()->toolConfig(TOOLBAR_NAME,
                                                                 ProjectSceneUiActions::defaultPlaybackToolBarConfig());
+    const UiActionList actions = uiActionsRegister()->actionList();
 
     for (const muse::ui::ToolConfig::Item& citem : playbackConfig.items) {
         if (!citem.show) {
             continue;
         }
 
-        if (citem.action == PLAYBACK_LEVEL_QUERY.toString()) {
+        if (citem.action.empty()) {
+            items << AbstractToolBarModel::makeSeparator();
+            continue;
+        }
+
+        const ActionCode actionCode = ProjectSceneUiActions::resolvePlaybackToolBarAction(citem.action, actions);
+        if (actionCode.empty()) {
+            continue;
+        }
+
+        if (actionCode == PLAYBACK_LEVEL_QUERY.toString()) {
             if (configuration()->playbackMeterPosition() == playback::PlaybackMeterPosition::MeterPosition::SideBar) {
                 // Skip playback meter item if it is set to be displayed in the sidebar
                 continue;
             }
         }
 
-        if (citem.action == AbstractToolBarModel::SEPARATOR_ID) {
-            items << AbstractToolBarModel::makeSeparator();
-            continue;
-        }
-
-        ToolBarItem* item = makeLocalItem(citem.action);
+        ToolBarItem* item = makeLocalItem(actionCode);
         if (!item) {
             continue;
         }
 
-        if (citem.action == PLAYBACK_PLAY_QUERY.toString()) {
+        if (actionCode == PLAYBACK_PLAY_QUERY.toString()) {
             item->setId(PLAY_PAUSE_ITEM_ID); // for quick finding
         }
 
-        if (citem.action == PLAYBACK_STOP_QUERY.toString()) {
+        if (actionCode == PLAYBACK_STOP_QUERY.toString()) {
             item->setId(STOP_ITEM_ID); // for quick finding
         }
 
@@ -389,6 +415,7 @@ ToolBarItem* PlaybackToolBarModel::makeLocalItem(const ActionCode& actionCode)
     if (type == PlaybackToolBarModel::PROJECT_CONTROL) {
         ToolBarItem* item = AbstractToolBarModel::makeItem(actionCode);
         item->setType(static_cast<ToolBarItemType::Type>(type));
+        item->setShowTitle(isFileAction(actionCode));
         return item;
     }
 

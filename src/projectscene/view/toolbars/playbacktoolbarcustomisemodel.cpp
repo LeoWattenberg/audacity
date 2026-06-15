@@ -39,9 +39,25 @@ void PlaybackToolBarCustomiseModel::load()
 
     auto isSeparator = [](const UiAction& a) { return a.code.empty(); };
 
+    const UiActionList actions = actionsRegister()->actionList();
     bool lastWasSeparator = false;
     for (const auto& configItem : toolConfig.items) {
-        UiAction action = actionsRegister()->action(configItem.action);
+        if (configItem.action.empty()) {
+            if (lastWasSeparator) {
+                continue;
+            }
+            lastWasSeparator = true;
+
+            items << makeSeparatorItem();
+            continue;
+        }
+
+        const ActionCode actionCode = projectscene::ProjectSceneUiActions::resolvePlaybackToolBarAction(configItem.action, actions);
+        if (actionCode.empty()) {
+            continue;
+        }
+
+        UiAction action = actionsRegister()->action(actionCode);
 
         if (isSeparator(action) && lastWasSeparator) {
             continue;

@@ -3,6 +3,8 @@
 */
 #include "projectsceneuiactions.h"
 
+#include <QString>
+
 #include "ui/view/iconcodes.h"
 #include "context/uicontext.h"
 #include "context/shortcutcontext.h"
@@ -14,6 +16,14 @@ using namespace au::projectscene;
 using namespace muse;
 using namespace muse::ui;
 using namespace muse::actions;
+
+static const ActionCode LEGACY_FADE_IN_ACTION_CODE("fade-in");
+static const ActionCode LEGACY_FADE_OUT_ACTION_CODE("fade-out");
+static const ActionCode FADE_IN_EFFECT_ACTION_ALIAS("action://effects/open?effectId=Fade In");
+static const ActionCode FADE_OUT_EFFECT_ACTION_ALIAS("action://effects/open?effectId=Fade Out");
+static const ActionCode INVERT_EFFECT_ACTION_ALIAS("action://effects/open?effectId=Invert");
+static const ActionCode REVERSE_EFFECT_ACTION_ALIAS("action://effects/open?effectId=Reverse");
+static const std::string EFFECT_OPEN_ACTION_PREFIX("action://effects/open?");
 
 static UiActionList STATIC_ACTIONS = {
     UiAction("clip-gain",
@@ -376,6 +386,17 @@ const ToolConfig& ProjectSceneUiActions::defaultPlaybackToolBarConfig()
             { "", true },
             { "trim-audio-outside-selection", true },
             { "silence-audio-selection", true },
+            { FADE_IN_EFFECT_ACTION_ALIAS, true },
+            { FADE_OUT_EFFECT_ACTION_ALIAS, true },
+            { INVERT_EFFECT_ACTION_ALIAS, true },
+            { REVERSE_EFFECT_ACTION_ALIAS, true },
+            { "", true },
+            { "file-save", true },
+            { "export-audio", true },
+            { "file-save-to-cloud", true },
+            { "file-share-audio", true },
+            { "file-open", true },
+            { "project-import", true },
             { "", true },
             // { "metronome", false },
             // { "", true },
@@ -390,4 +411,36 @@ const ToolConfig& ProjectSceneUiActions::defaultPlaybackToolBarConfig()
         };
     }
     return config;
+}
+
+muse::actions::ActionCode ProjectSceneUiActions::resolvePlaybackToolBarAction(const ActionCode& actionCode,
+                                                                              const UiActionList& actions)
+{
+    const bool isFadeInAction = actionCode == LEGACY_FADE_IN_ACTION_CODE || actionCode == FADE_IN_EFFECT_ACTION_ALIAS;
+    const bool isFadeOutAction = actionCode == LEGACY_FADE_OUT_ACTION_CODE || actionCode == FADE_OUT_EFFECT_ACTION_ALIAS;
+    const bool isInvertAction = actionCode == INVERT_EFFECT_ACTION_ALIAS;
+    const bool isReverseAction = actionCode == REVERSE_EFFECT_ACTION_ALIAS;
+
+    if (!isFadeInAction && !isFadeOutAction && !isInvertAction && !isReverseAction) {
+        return actionCode;
+    }
+
+    QString title;
+    if (isFadeInAction) {
+        title = QStringLiteral("Fade In");
+    } else if (isFadeOutAction) {
+        title = QStringLiteral("Fade Out");
+    } else if (isInvertAction) {
+        title = QStringLiteral("Invert");
+    } else {
+        title = QStringLiteral("Reverse");
+    }
+
+    for (const UiAction& action : actions) {
+        if (action.code.rfind(EFFECT_OPEN_ACTION_PREFIX, 0) == 0 && action.title.qTranslatedWithoutMnemonic() == title) {
+            return action.code;
+        }
+    }
+
+    return {};
 }

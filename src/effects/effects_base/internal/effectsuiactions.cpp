@@ -6,6 +6,7 @@
 #include "context/uicontext.h"
 #include "context/shortcutcontext.h"
 #include "types/translatablestring.h"
+#include "ui/view/iconcodes.h"
 #include "log.h"
 
 using namespace au::effects;
@@ -100,6 +101,15 @@ UiAction makeUiAction(const std::string& uri, const EffectMeta& meta)
     action.scCtx = au::context::CTX_PROJECT_FOCUSED;
     action.description = TranslatableString::untranslatable(meta.description);
     action.title = TranslatableString::untranslatable(meta.title);
+    if (meta.title == u"Fade In") {
+        action.iconCode = IconCode::Code::CHEVRON_LEFT;
+    } else if (meta.title == u"Fade Out") {
+        action.iconCode = IconCode::Code::CHEVRON_RIGHT;
+    } else if (meta.title == u"Invert") {
+        action.iconCode = IconCode::Code::NOTE_FLIP;
+    } else if (meta.title == u"Reverse") {
+        action.iconCode = IconCode::Code::REWIND;
+    }
     return action;
 }
 
