@@ -77,7 +77,8 @@ const UiActionList ProjectUiActions::m_actions = {
              au::context::UiCtxAny,
              au::context::CTX_ANY,
              TranslatableString("action", "&Save"),
-             TranslatableString("action", "Save")
+             TranslatableString("action", "Save"),
+             IconCode::Code::SAVE
              ),
     UiAction("file-save-as",
              au::context::UiCtxAny,
@@ -89,7 +90,8 @@ const UiActionList ProjectUiActions::m_actions = {
              au::context::UiCtxAny,
              au::context::CTX_ANY,
              TranslatableString("action", "&Export audio…"),
-             TranslatableString("action", "Export audio…")
+             TranslatableString("action", "Export audio…"),
+             IconCode::Code::SHARE_FILE
              ),
     UiAction("export-labels",
              au::context::UiCtxAny,
