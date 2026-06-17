@@ -21,7 +21,8 @@ class DropController : public QObject, public muse::Contextable
 public:
     explicit DropController(QObject* parent = nullptr);
 
-    Q_INVOKABLE void probeAudioFiles(const QStringList& fileUrls);
+    Q_INVOKABLE void probeAudioFiles(const QVariantList& fileUrls);
+    void probeAudioFiles(const QStringList& fileUrls);
     Q_INVOKABLE QVariantList lastProbedDurations() const;
     Q_INVOKABLE QVariantList lastProbedFileNames() const;
     Q_INVOKABLE void startImportDrag();
@@ -36,5 +37,7 @@ private:
     std::vector<au::importexport::FileInfo> m_lastDraggedFilesInfo;
     QStringList m_lastDraggedUrls;
     int m_tracksCountWhenDragStarted = -1;
+
+    void probeAudioFile(const QUrl& url);
 };
 }

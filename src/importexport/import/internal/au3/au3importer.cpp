@@ -105,7 +105,7 @@ au::importexport::FileInfo au::importexport::Au3Importer::fileInfo(const muse::i
             continue;
         }
 
-        auto inFile = plugin->Open(filePath.toStdString(), project);
+        auto inFile = plugin->Open(wxFromString(filePath.toString()), project);
         if ((inFile != NULL) && (inFile->GetStreamCount() > 0)) {
             fileInfo.path = filePath;
             fileInfo.duration = inFile->GetDuration();
@@ -199,7 +199,7 @@ bool au::importexport::Au3Importer::importIntoTrack(const muse::io::path_t& file
 
     {
         ImportProgress importProgressListener(*project);
-        const wxString wxPath = filePath.toString().toUtf8().constData();
+        const wxString wxPath = wxFromString(filePath.toString());
         const bool ok = Importer::Get().Import(
             *project,
             wxPath,
@@ -216,7 +216,7 @@ bool au::importexport::Au3Importer::importIntoTrack(const muse::io::path_t& file
         }
     } // ImportProgress (and its dialog) destroyed here, before tempo detection
 
-    std::string baseName = filename(filePath, false).toStdString();
+    wxString baseName = wxFromString(filename(filePath, false).toString());
     std::vector<ITrackDataPtr> importedData;
     std::vector<WaveTrack*> importedWaveTracks;
     for (auto& holder : tmpTracks) {

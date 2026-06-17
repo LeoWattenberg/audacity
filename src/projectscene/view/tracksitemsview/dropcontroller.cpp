@@ -12,36 +12,46 @@ DropController::DropController(QObject* parent)
     : QObject(parent), muse::Contextable(muse::iocCtxForQmlObject(this))
 {}
 
+void DropController::probeAudioFiles(const QVariantList& fileUrls)
+{
+    m_lastDraggedUrls.clear();
+    m_lastDraggedFilesInfo.clear();
+
+    for (const QVariant& fileUrl : fileUrls) {
+        if (fileUrl.canConvert<QUrl>()) {
+            probeAudioFile(fileUrl.toUrl());
+        } else {
+            probeAudioFile(QUrl(fileUrl.toString()));
+        }
+    }
+}
+
 void DropController::probeAudioFiles(const QStringList& fileUrls)
 {
     m_lastDraggedUrls.clear();
     m_lastDraggedFilesInfo.clear();
 
-    std::vector<muse::io::path_t> localPaths;
-    localPaths.reserve(fileUrls.size());
-
-    const auto exts = importer()->supportedExtensions();
-    for (const auto& fileUrl : fileUrls) {
-        const QUrl url(fileUrl);
-        QString local = url.isLocalFile() ? url.toLocalFile() : fileUrl;
-        muse::io::path_t path = muse::io::path_t(local);
-        if (muse::contains(exts, muse::io::suffix(path))) {
-            localPaths.push_back(path);
-            m_lastDraggedUrls.push_back(fileUrl);
-        }
+    for (const QString& fileUrl : fileUrls) {
+        probeAudioFile(QUrl(fileUrl));
     }
+}
 
-    if (localPaths.empty()) {
+void DropController::probeAudioFile(const QUrl& url)
+{
+    const auto exts = importer()->supportedExtensions();
+    const QString local = url.isLocalFile() ? url.toLocalFile() : url.toString();
+    muse::io::path_t path = muse::io::path_t(local);
+    if (!muse::contains(exts, muse::io::suffix(path))) {
         return;
     }
 
-    for (const auto& path : localPaths) {
-        au::importexport::FileInfo fileInfo = importer()->fileInfo(path);
-        if (fileInfo.isEmpty()) {
-            continue;
-        }
-        m_lastDraggedFilesInfo.push_back(std::move(fileInfo));
+    au::importexport::FileInfo fileInfo = importer()->fileInfo(path);
+    if (fileInfo.isEmpty()) {
+        return;
     }
+
+    m_lastDraggedUrls.push_back(path.toQString());
+    m_lastDraggedFilesInfo.push_back(std::move(fileInfo));
 }
 
 QVariantList DropController::lastProbedDurations() const
@@ -65,7 +75,7 @@ QVariantList DropController::lastProbedFileNames() const
     auto infoIter = m_lastDraggedFilesInfo.cbegin();
     for (; urlIter != m_lastDraggedUrls.cend() && infoIter != m_lastDraggedFilesInfo.cend();
          ++urlIter, ++infoIter) {
-        std::string title = muse::io::filename(*urlIter, false /* including extension */).toStdString();
+        std::string title = muse::io::filename(muse::io::path_t(*urlIter), false /* including extension */).toStdString();
 
         for (int n = 0; n < infoIter->trackCount; ++n) {
             out.push_back(QString::fromStdString(title));
@@ -86,7 +96,7 @@ void DropController::startImportDrag()
         return;
     }
 
-    m_tracksCountWhenDragStarted = prj->trackList().size();
+    m_tracksCountWhenDragStarted = static_cast<int>(prj->trackList().size());
 }
 
 void DropController::endImportDrag()
