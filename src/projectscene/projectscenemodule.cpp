@@ -13,6 +13,7 @@
 #include "internal/projectsceneuiactions.h"
 #include "internal/projectsceneactionscontroller.h"
 #include "internal/projectsceneconfiguration.h"
+#include "internal/projectbin.h"
 #include "internal/projectviewstatecreator.h"
 #include "internal/realtimeeffectpaneltrackselection.h"
 
@@ -78,6 +79,8 @@
 #include "view/toolbars/playbacktoolbarcustomiseitem.h"
 
 #include "view/historypanel/historypanelmodel.h"
+
+#include "view/projectbin/projectbinmodel.h"
 
 #include "view/trackruler/trackrulermodel.h"
 
@@ -212,6 +215,9 @@ void ProjectSceneModule::registerUiTypes()
     // history panel
     qmlRegisterType<HistoryPanelModel>("Audacity.ProjectScene", 1, 0, "HistoryPanelModel");
 
+    // project bin
+    qmlRegisterType<ProjectBinModel>("Audacity.ProjectScene", 1, 0, "ProjectBinModel");
+
     //track ruler
     qmlRegisterType<TrackRulerModel>("Audacity.ProjectScene", 1, 0, "TrackRulerModel");
 }
@@ -235,9 +241,11 @@ void ProjectSceneContext::registerExports()
     m_projectSceneActionsController = std::make_shared<ProjectSceneActionsController>(iocContext());
     m_uiActions = std::make_shared<ProjectSceneUiActions>(iocContext(), m_projectSceneActionsController);
     m_realtimeEffectPanelTrackSelection = std::make_shared<RealtimeEffectPanelTrackSelection>(iocContext());
+    m_projectBin = std::make_shared<ProjectBin>(iocContext());
 
     ioc()->registerExport<IProjectSceneActionsController>(mname, m_projectSceneActionsController);
     ioc()->registerExport<IRealtimeEffectPanelTrackSelection>(mname, m_realtimeEffectPanelTrackSelection);
+    ioc()->registerExport<IProjectBin>(mname, m_projectBin);
     ioc()->registerExport<IWavePainter>(mname, std::make_shared<WavePainterProxy>(iocContext()));
     ioc()->registerExport<IConnectingDotsPainter>(mname, std::make_shared<ConnectingDotsPainter>(iocContext()));
     ioc()->registerExport<IMinMaxRMSPainter>(mname, std::make_shared<MinMaxRMSPainter>(iocContext()));
@@ -253,6 +261,7 @@ void ProjectSceneContext::onInit(const muse::IApplication::RunMode& mode)
     m_uiActions->init();
     m_projectSceneActionsController->init();
     m_realtimeEffectPanelTrackSelection->init();
+    m_projectBin->init();
 
     auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(mname);
     if (ar) {

@@ -13,6 +13,7 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/iprojectviewstate.h
     ${CMAKE_CURRENT_LIST_DIR}/iprojectviewstatecreator.h
     ${CMAKE_CURRENT_LIST_DIR}/iprojectsceneactionscontroller.h
+    ${CMAKE_CURRENT_LIST_DIR}/iprojectbin.h
 
     ${CMAKE_CURRENT_LIST_DIR}/types/projectscenetypes.h
 
@@ -26,6 +27,8 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/internal/projectviewstate.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/projectviewstatecreator.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/projectviewstatecreator.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/projectbin.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/projectbin.h
 
     ${CMAKE_CURRENT_LIST_DIR}/internal/projectsceneuiactions.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/projectsceneuiactions.h
@@ -209,6 +212,9 @@ set(MODULE_SRC
 
     ${CMAKE_CURRENT_LIST_DIR}/view/historypanel/historypanelmodel.cpp
     ${CMAKE_CURRENT_LIST_DIR}/view/historypanel/historypanelmodel.h
+
+    ${CMAKE_CURRENT_LIST_DIR}/view/projectbin/projectbinmodel.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/view/projectbin/projectbinmodel.h
 
     ${CMAKE_CURRENT_LIST_DIR}/view/trackruler/dblogmonoruler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/view/trackruler/dblogmonoruler.h

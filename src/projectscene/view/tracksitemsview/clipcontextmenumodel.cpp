@@ -15,6 +15,7 @@ using namespace muse::actions;
 static const ActionCode ENABLE_STRETCH_CODE("stretch-clip-to-match-tempo");
 static const ActionCode RENDER_PITCH_SPEED_CODE("clip-render-pitch-speed");
 static const ActionCode RESET_PITCH_SPEED_CODE("clip-reset-pitch-speed");
+static const ActionCode MOVE_CLIP_TO_PROJECT_BIN_CODE("move-clip-to-project-bin");
 static const ActionCodeList PITCH_SPEED_CODES { RENDER_PITCH_SPEED_CODE, RESET_PITCH_SPEED_CODE };
 
 namespace {
@@ -84,6 +85,7 @@ void ClipContextMenuModel::load()
         makeSeparator(),
         makeItemWithArg("split"),
         makeItemWithArg("clip-export"),
+        makeItemWithArg(MOVE_CLIP_TO_PROJECT_BIN_CODE),
         makeSeparator(),
         enableStretchItem,
         makeItemWithArg("clip-pitch-speed-open"),
@@ -133,6 +135,8 @@ void ClipContextMenuModel::handleMenuItem(const QString& itemId)
         const muse::String trackTitle = track->title;
         auto args = muse::actions::ActionData::make_arg2(trackId, trackTitle);
         dispatcher()->dispatch(spectrogram::TRACK_SPECTROGRAM_SETTINGS_ACTION, std::move(args));
+    } else if (itemId == QString::fromStdString(MOVE_CLIP_TO_PROJECT_BIN_CODE)) {
+        projectBin()->moveClipToBin(m_clipKey.key);
     } else {
         AbstractMenuModel::handleMenuItem(itemId);
     }

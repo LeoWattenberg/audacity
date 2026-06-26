@@ -225,6 +225,12 @@ static UiActionList STATIC_ACTIONS = {
              TranslatableString("action", "Pitch and speed"),
              TranslatableString("action", "Pitch and speed")
              ),
+    UiAction("move-clip-to-project-bin",
+             au::context::UiCtxProjectOpened,
+             au::context::CTX_PROJECT_OPENED,
+             TranslatableString("action", "Move to project bin"),
+             TranslatableString("action", "Move clip to project bin")
+             ),
     UiAction("toggle-rms-in-waveform",
              au::context::UiCtxProjectOpened,
              muse::shortcuts::CTX_PROJECT_OPENED,
