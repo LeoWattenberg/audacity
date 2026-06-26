@@ -442,9 +442,7 @@ DockPage {
             minimumHeight: horizontalDock ? root.horizontalPanelMinHeight : 83
             maximumHeight: horizontalDock ? root.horizontalPanelMaxHeight : 100000
 
-            groupName: horizontalDock
-                       ? root.horizontalPanelsGroup
-                       : root.verticalPanelsGroup
+            groupName: horizontalDock ? root.horizontalPanelsGroup : root.verticalPanelsGroup
             location: Location.Right
 
             visible: true
@@ -452,6 +450,8 @@ DockPage {
             dropDestinations: root.verticalPanelDropDestinations.concat(root.horizontalPanelDropDestinations)
 
             ProjectBinPanel {
+                id: projectBinContent
+
                 navigationSection: projectBinPanel.navigationSection
                 navigationOrderStart: projectBinPanel.contentNavigationPanelOrderStart
             }
@@ -462,6 +462,7 @@ DockPage {
         id: tracksItemsView
 
         navPanels: tracksNavModel.viewItemPanels
+        projectBinDropTarget: projectBinContent
 
         Connections {
             target: root

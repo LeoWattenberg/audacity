@@ -14,6 +14,7 @@ Rectangle {
     id: root
 
     property var navPanels: null
+    property var projectBinDropTarget: null
 
     property bool itemHovered: false
     property bool itemHeaderHovered: false
@@ -628,12 +629,21 @@ Rectangle {
                 }
 
                 if (root.interactionState === TracksItemsView.State.DraggingItem) {
+                    let droppedToProjectBin = false
+                    if (itemWasMoved && root.projectBinDropTarget && root.projectBinDropTarget.containsScenePoint) {
+                        droppedToProjectBin = root.projectBinDropTarget.containsScenePoint(mainMouseArea.mapToItem(null, e.x, e.y))
+                    }
+
                     root.interactionState = TracksItemsView.State.Idle
                     if (itemWasMoved) {
                         tracksItemsView.itemMoveRequested(hoveredItemKey, true)
                         tracksItemsView.stopAutoScroll()
                     }
                     tracksItemsView.itemEndEditRequested(hoveredItemKey)
+
+                    if (droppedToProjectBin && root.projectBinDropTarget && root.projectBinDropTarget.moveTimelineClipToBin) {
+                        root.projectBinDropTarget.moveTimelineClipToBin(hoveredItemKey)
+                    }
                 } else {
                     splitToolController.mouseUp(e.x)
 

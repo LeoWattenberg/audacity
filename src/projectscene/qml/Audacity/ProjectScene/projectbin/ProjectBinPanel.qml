@@ -34,6 +34,15 @@ Item {
         Component.onCompleted: init()
     }
 
+    function containsScenePoint(scenePoint) {
+        let localPoint = root.mapFromItem(null, scenePoint.x, scenePoint.y)
+        return root.visible && root.enabled && localPoint.x >= 0 && localPoint.x <= root.width && localPoint.y >= 0 && localPoint.y <= root.height
+    }
+
+    function moveTimelineClipToBin(clipKey) {
+        return projectBinModel.moveClipToBin(clipKey)
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -53,9 +62,18 @@ Item {
                 anchors.margins: 6
 
                 model: [
-                    { "title": qsTrc("projectbin", "Thumbnail"), "mode": ProjectBinPanel.Thumbnail },
-                    { "title": qsTrc("projectbin", "Compact"), "mode": ProjectBinPanel.Compact },
-                    { "title": qsTrc("projectbin", "List"), "mode": ProjectBinPanel.List }
+                    {
+                        "title": qsTrc("projectbin", "Thumbnail"),
+                        "mode": ProjectBinPanel.Thumbnail
+                    },
+                    {
+                        "title": qsTrc("projectbin", "Compact"),
+                        "mode": ProjectBinPanel.Compact
+                    },
+                    {
+                        "title": qsTrc("projectbin", "List"),
+                        "mode": ProjectBinPanel.List
+                    }
                 ]
 
                 delegate: FlatRadioButton {
@@ -291,13 +309,13 @@ Item {
 
                 anchors.fill: parent
 
-                onEntered: function(drop) {
+                onEntered: function (drop) {
                     if (drop.urls && drop.urls.length > 0) {
                         drop.acceptProposedAction()
                     }
                 }
 
-                onDropped: function(drop) {
+                onDropped: function (drop) {
                     if (drop.urls && drop.urls.length > 0) {
                         projectBinModel.addFiles(drop.urls)
                         drop.acceptProposedAction()

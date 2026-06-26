@@ -8,6 +8,7 @@
 #include "async/asyncable.h"
 #include "modularity/ioc.h"
 #include "projectscene/iprojectbin.h"
+#include "projectscene/types/projectscenetypes.h"
 
 namespace au::projectscene {
 class ProjectBinModel : public QAbstractListModel, public muse::Contextable, public muse::async::Asyncable
@@ -39,6 +40,7 @@ public:
     Q_INVOKABLE int itemTrackCount(int index) const;
     Q_INVOKABLE QVariantList itemDurations(int index) const;
     Q_INVOKABLE QVariantList itemTitles(int index) const;
+    Q_INVOKABLE bool moveClipToBin(const ClipKey& clipKey);
     Q_INVOKABLE void pasteItem(int index, const QVariantList& trackIds, double startTime);
     Q_INVOKABLE bool previewItem(int index);
 

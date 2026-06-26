@@ -119,6 +119,11 @@ QVariantList ProjectBinModel::itemTitles(int index) const
     return titles;
 }
 
+bool ProjectBinModel::moveClipToBin(const ClipKey& clipKey)
+{
+    return projectBin()->moveClipToBin(clipKey.key);
+}
+
 void ProjectBinModel::pasteItem(int index, const QVariantList& trackIds, double startTime)
 {
     trackedit::TrackIdList dstTrackIds;
