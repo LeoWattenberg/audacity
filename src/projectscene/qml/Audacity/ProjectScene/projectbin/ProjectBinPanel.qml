@@ -110,10 +110,41 @@ Item {
                     readonly property bool thumbnailMode: root.viewMode === ProjectBinPanel.Thumbnail
                     readonly property bool compactMode: root.viewMode === ProjectBinPanel.Compact
                     readonly property bool listMode: root.viewMode === ProjectBinPanel.List
+                    readonly property bool hasWaveformData: model.hasWaveform
+                    readonly property var waveformData: model.waveform
                     readonly property int leftColumnWidth: 34
                     readonly property int horizontalPadding: 8
+                    readonly property int actionsWidth: 108
+                    readonly property int waveformBarCount: hasWaveformData && waveformData ? waveformData.length : 18
                     readonly property int clipWidth: Math.max(1, width - leftColumnWidth - (2 * horizontalPadding))
                     readonly property int clipHeight: thumbnailMode ? Math.round(clipWidth * 9 / 16) : compactMode ? 32 : 28
+                    property bool editingTitle: false
+
+                    function waveformLevel(barIndex) {
+                        if (hasWaveformData && waveformData && barIndex < waveformData.length) {
+                            return Math.max(0.08, Math.min(1, waveformData[barIndex]))
+                        }
+
+                        return 0.24 + ((barIndex * 7) % 11) / 18
+                    }
+
+                    function beginRename() {
+                        editingTitle = true
+                        renameInput.currentText = model.title
+                        listRenameInput.currentText = model.title
+                        let activeInput = listMode ? listRenameInput : renameInput
+                        activeInput.ensureActiveFocus()
+                        activeInput.selectAll()
+                    }
+
+                    function finishRename() {
+                        if (!editingTitle) {
+                            return
+                        }
+
+                        editingTitle = false
+                        projectBinModel.renameItem(binIndex, listMode ? listRenameInput.currentText : renameInput.currentText)
+                    }
 
                     width: ListView.view ? ListView.view.width : 240
                     height: thumbnailMode ? clipHeight + 10 : compactMode ? 42 : 34
@@ -152,7 +183,7 @@ Item {
                         toolTipTitle: qsTrc("projectbin", "Preview")
 
                         navigation.panel: navPanel
-                        navigation.order: delegateRoot.binIndex * 4
+                        navigation.order: delegateRoot.binIndex * 8
 
                         onClicked: {
                             projectBinModel.previewItem(delegateRoot.binIndex)
@@ -172,7 +203,7 @@ Item {
 
                         color: delegateRoot.listMode ? "transparent" : ui.theme.backgroundPrimaryColor
                         border.width: delegateRoot.listMode ? 0 : 1
-                        border.color: ui.theme.strokeColor
+                        border.color: model.missing ? "orange" : ui.theme.strokeColor
 
                         NavigationFocusBorder {
                             navigationCtrl: dragNav
@@ -185,7 +216,7 @@ Item {
                             name: "ProjectBinItem_" + delegateRoot.binIndex
                             enabled: root.enabled && root.visible
                             panel: navPanel
-                            order: delegateRoot.binIndex * 4 + 1
+                            order: delegateRoot.binIndex * 8 + 1
 
                             accessible.role: MUAccessible.ListItem
                             accessible.name: model.title
@@ -206,11 +237,40 @@ Item {
                             StyledTextLabel {
                                 anchors.fill: parent
                                 anchors.leftMargin: 8
-                                anchors.rightMargin: 8
+                                anchors.rightMargin: delegateRoot.actionsWidth
                                 horizontalAlignment: Text.AlignLeft
                                 maximumLineCount: 1
+                                visible: !delegateRoot.editingTitle
                                 text: model.title
                                 font: delegateRoot.thumbnailMode ? ui.theme.bodyBoldFont : ui.theme.bodyFont
+                            }
+
+                            TextInputField {
+                                id: renameInput
+
+                                anchors.fill: parent
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: delegateRoot.actionsWidth
+                                visible: delegateRoot.editingTitle
+                                currentText: model.title
+                                background.color: header.color
+                                background.border.width: 0
+                                background.radius: 0
+                                textSidePadding: 2
+
+                                onAccepted: {
+                                    delegateRoot.finishRename()
+                                }
+
+                                onEscaped: {
+                                    delegateRoot.editingTitle = false
+                                }
+
+                                onFocusChanged: {
+                                    if (!focus && delegateRoot.editingTitle) {
+                                        delegateRoot.finishRename()
+                                    }
+                                }
                             }
                         }
 
@@ -225,17 +285,17 @@ Item {
                             anchors.rightMargin: delegateRoot.listMode ? 0 : 8
 
                             visible: !delegateRoot.listMode
-                            spacing: Math.max(2, Math.floor(width / 38))
+                            spacing: Math.max(2, Math.floor(width / 58))
 
                             Repeater {
-                                model: 18
+                                model: delegateRoot.waveformBarCount
 
                                 Rectangle {
-                                    width: Math.max(2, Math.floor((waveform.width - (waveform.spacing * 17)) / 18))
-                                    height: Math.max(4, waveform.height * (0.24 + ((index * 7) % 11) / 18))
+                                    width: Math.max(2, Math.floor((waveform.width - (waveform.spacing * (delegateRoot.waveformBarCount - 1))) / Math.max(1, delegateRoot.waveformBarCount)))
+                                    height: Math.max(4, waveform.height * delegateRoot.waveformLevel(index))
                                     anchors.verticalCenter: parent.verticalCenter
                                     radius: 1
-                                    color: ui.colorWithAlphaF(ui.theme.fontPrimaryColor, 0.38)
+                                    color: ui.colorWithAlphaF(ui.theme.fontPrimaryColor, delegateRoot.hasWaveformData ? 0.52 : 0.38)
                                 }
                             }
                         }
@@ -243,7 +303,7 @@ Item {
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 0
-                            anchors.rightMargin: 0
+                            anchors.rightMargin: delegateRoot.actionsWidth
                             visible: delegateRoot.listMode
                             spacing: 6
 
@@ -251,7 +311,32 @@ Item {
                                 Layout.fillWidth: true
                                 horizontalAlignment: Text.AlignLeft
                                 maximumLineCount: 1
+                                visible: !delegateRoot.editingTitle
                                 text: model.title
+                            }
+
+                            TextInputField {
+                                id: listRenameInput
+
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 28
+                                visible: delegateRoot.editingTitle
+                                currentText: model.title
+                                textSidePadding: 2
+
+                                onAccepted: {
+                                    delegateRoot.finishRename()
+                                }
+
+                                onEscaped: {
+                                    delegateRoot.editingTitle = false
+                                }
+
+                                onFocusChanged: {
+                                    if (!focus && delegateRoot.editingTitle) {
+                                        delegateRoot.finishRename()
+                                    }
+                                }
                             }
 
                             StyledTextLabel {
@@ -260,21 +345,42 @@ Item {
                             }
                         }
 
-                        StyledTextLabel {
+                        Row {
                             anchors.right: parent.right
                             anchors.rightMargin: 8
                             anchors.bottom: parent.bottom
                             anchors.bottomMargin: 4
                             visible: !delegateRoot.listMode
-                            text: model.durationText
-                            opacity: 0.75
+                            spacing: 8
+
+                            StyledTextLabel {
+                                visible: model.referenceCount > 0
+                                text: qsTrc("projectbin", "%n use(s)", "", model.referenceCount)
+                                opacity: 0.75
+                            }
+
+                            StyledTextLabel {
+                                text: model.durationText
+                                opacity: 0.75
+                            }
+                        }
+
+                        StyledTextLabel {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 4
+                            visible: model.missing && !delegateRoot.listMode
+                            text: qsTrc("projectbin", "Missing")
+                            color: "orange"
+                            opacity: 0.9
                         }
 
                         MouseArea {
                             id: dragArea
 
                             anchors.fill: parent
-                            enabled: root.enabled
+                            enabled: root.enabled && !delegateRoot.editingTitle
                             hoverEnabled: true
                             drag.target: dragSource
 
@@ -288,6 +394,78 @@ Item {
                                 dragSource.Drag.drop()
                                 dragSource.x = clipSurface.x
                                 dragSource.y = clipSurface.y
+                            }
+                        }
+
+                        Row {
+                            id: actionsRow
+
+                            anchors.right: parent.right
+                            anchors.rightMargin: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+                            z: 2
+
+                            FlatButton {
+                                width: 24
+                                height: 24
+                                minWidth: 24
+                                margins: 0
+                                icon: IconCode.EDIT
+                                buttonType: FlatButton.IconOnly
+                                toolTipTitle: qsTrc("projectbin", "Rename")
+                                navigation.panel: navPanel
+                                navigation.order: delegateRoot.binIndex * 8 + 2
+                                onClicked: {
+                                    delegateRoot.beginRename()
+                                }
+                            }
+
+                            FlatButton {
+                                width: 24
+                                height: 24
+                                minWidth: 24
+                                margins: 0
+                                icon: IconCode.WAVEFORM
+                                buttonType: FlatButton.IconOnly
+                                enabled: model.referenceCount > 0
+                                toolTipTitle: qsTrc("projectbin", "Select all instances")
+                                navigation.panel: navPanel
+                                navigation.order: delegateRoot.binIndex * 8 + 3
+                                onClicked: {
+                                    projectBinModel.selectAllInstances(delegateRoot.binIndex)
+                                }
+                            }
+
+                            FlatButton {
+                                width: 24
+                                height: 24
+                                minWidth: 24
+                                margins: 0
+                                icon: IconCode.OPEN_FILE
+                                buttonType: FlatButton.IconOnly
+                                visible: model.missing
+                                toolTipTitle: qsTrc("projectbin", "Locate")
+                                navigation.panel: navPanel
+                                navigation.order: delegateRoot.binIndex * 8 + 4
+                                onClicked: {
+                                    projectBinModel.locateMissingReference(delegateRoot.binIndex)
+                                }
+                            }
+
+                            FlatButton {
+                                width: 24
+                                height: 24
+                                minWidth: 24
+                                margins: 0
+                                icon: IconCode.DELETE_TANK
+                                buttonType: FlatButton.IconOnly
+                                toolTipTitle: qsTrc("projectbin", "Remove from project bin")
+                                navigation.panel: navPanel
+                                navigation.order: delegateRoot.binIndex * 8 + 5
+                                onClicked: {
+                                    projectBinModel.removeItem(delegateRoot.binIndex)
+                                }
                             }
                         }
                     }

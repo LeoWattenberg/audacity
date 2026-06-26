@@ -35,6 +35,14 @@ QVariant ProjectBinModel::data(const QModelIndex& index, int role) const
         return item->trackCount;
     case SourceTypeRole:
         return static_cast<int>(item->sourceType);
+    case WaveformRole:
+        return waveformData(*item);
+    case HasWaveformRole:
+        return !item->waveform.empty();
+    case ReferenceCountRole:
+        return projectBin()->referenceCount(index.row());
+    case MissingRole:
+        return projectBin()->isMissing(index.row());
     default:
         return {};
     }
@@ -54,6 +62,10 @@ QHash<int, QByteArray> ProjectBinModel::roleNames() const
         { DurationTextRole, "durationText" },
         { TrackCountRole, "trackCount" },
         { SourceTypeRole, "sourceType" },
+        { WaveformRole, "waveform" },
+        { HasWaveformRole, "hasWaveform" },
+        { ReferenceCountRole, "referenceCount" },
+        { MissingRole, "missing" },
     };
 }
 
@@ -144,6 +156,26 @@ bool ProjectBinModel::previewItem(int index)
     return projectBin()->previewItem(index);
 }
 
+bool ProjectBinModel::renameItem(int index, const QString& title)
+{
+    return projectBin()->renameItem(index, title);
+}
+
+bool ProjectBinModel::removeItem(int index)
+{
+    return projectBin()->removeItem(index);
+}
+
+bool ProjectBinModel::selectAllInstances(int index)
+{
+    return projectBin()->selectAllInstances(index);
+}
+
+bool ProjectBinModel::locateMissingReference(int index)
+{
+    return projectBin()->locateMissingReference(index);
+}
+
 const ProjectBinItem* ProjectBinModel::itemAt(int index) const
 {
     const std::vector<ProjectBinItem>& items = projectBin()->items();
@@ -169,6 +201,18 @@ QString ProjectBinModel::durationText(double duration) const
 
     return QString::number(minutes) + QStringLiteral(":")
            + QStringLiteral("%1").arg(seconds, 2, 10, QLatin1Char('0'));
+}
+
+QVariantList ProjectBinModel::waveformData(const ProjectBinItem& item) const
+{
+    QVariantList values;
+    values.reserve(static_cast<int>(item.waveform.size()));
+
+    for (double value : item.waveform) {
+        values.push_back(value);
+    }
+
+    return values;
 }
 
 void ProjectBinModel::reload()

@@ -26,7 +26,11 @@ public:
         DurationRole,
         DurationTextRole,
         TrackCountRole,
-        SourceTypeRole
+        SourceTypeRole,
+        WaveformRole,
+        HasWaveformRole,
+        ReferenceCountRole,
+        MissingRole
     };
 
     explicit ProjectBinModel(QObject* parent = nullptr);
@@ -43,6 +47,10 @@ public:
     Q_INVOKABLE bool moveClipToBin(const ClipKey& clipKey);
     Q_INVOKABLE void pasteItem(int index, const QVariantList& trackIds, double startTime);
     Q_INVOKABLE bool previewItem(int index);
+    Q_INVOKABLE bool renameItem(int index, const QString& title);
+    Q_INVOKABLE bool removeItem(int index);
+    Q_INVOKABLE bool selectAllInstances(int index);
+    Q_INVOKABLE bool locateMissingReference(int index);
 
 signals:
     void countChanged();
@@ -50,6 +58,7 @@ signals:
 private:
     const ProjectBinItem* itemAt(int index) const;
     QString durationText(double duration) const;
+    QVariantList waveformData(const ProjectBinItem& item) const;
     void reload();
 
     bool m_inited = false;
