@@ -37,10 +37,17 @@ DropArea {
         id: prv
 
         property var lastProbedUrls: null
+        property int lastProjectBinIndex: -1
     }
 
     DropController {
         id: dropController
+    }
+
+    ProjectBinModel {
+        id: projectBinModel
+
+        Component.onCompleted: init()
     }
 
     Timer {
@@ -49,6 +56,7 @@ DropArea {
         onTriggered: {
             tracksItemsView.clearPreviewImportClip([])
             prv.lastProbedUrls = null
+            prv.lastProjectBinIndex = -1
             dropController.endImportDrag()
             root.setGuidelineRequested(-1, false)
         }
@@ -75,14 +83,22 @@ DropArea {
     function handleOnEntered(drop, externalDrop) {
         clearPreviewClipsTimer.stop()
 
-        let urls = drop.urls
+        let projectBinIndex = projectBinDropIndex(drop)
         dropController.startImportDrag()
-        if (!prv.lastProbedUrls) {
+
+        if (projectBinIndex >= 0) {
+            prv.lastProjectBinIndex = projectBinIndex
+            prv.lastProbedUrls = null
+        } else if (!prv.lastProbedUrls) {
             // NOTE: working with urls list from DropArea
             // is expensive so avoid it otherwise the preview clip
             // move will be laggy
-            dropController.probeAudioFiles(urls)
-            prv.lastProbedUrls = urls
+            let urls = drop.urls
+            if (urls) {
+                dropController.probeAudioFiles(urls)
+                prv.lastProbedUrls = urls
+            }
+            prv.lastProjectBinIndex = -1
         }
 
         let dropX = 0
@@ -93,14 +109,14 @@ DropArea {
         }
 
         var trackId = tracksViewState.trackAtPosition(dropX, dropY)
-        let trackCount = dropController.requiredTracksCount()
+        let trackCount = projectBinIndex >= 0 ? projectBinModel.itemTrackCount(projectBinIndex) : dropController.requiredTracksCount()
         dropController.prepareConditionalTracks(trackId, trackCount)
         dropController.removeDragAddedTracks(trackId, trackCount)
 
         let tracksIds = dropController.draggedTracksIds(trackId, trackCount)
         tracksItemsView.clearPreviewImportClip(tracksIds /* tracks not to clear */)
-        const durations = dropController.lastProbedDurations()
-        const titles = dropController.lastProbedFileNames()
+        const durations = projectBinIndex >= 0 ? projectBinModel.itemDurations(projectBinIndex) : dropController.lastProbedDurations()
+        const titles = projectBinIndex >= 0 ? projectBinModel.itemTitles(projectBinIndex) : dropController.lastProbedFileNames()
 
         tracksItemsView.previewImportClipRequested(tracksIds, dropX, durations, titles)
 
@@ -116,15 +132,32 @@ DropArea {
         }
 
         let trackId = tracksViewState.trackAtPosition(dropX, dropY)
-        let trackCount = dropController.requiredTracksCount()
+        let projectBinIndex = projectBinDropIndex(drop)
+        if (projectBinIndex < 0) {
+            projectBinIndex = prv.lastProjectBinIndex
+        }
+        let trackCount = projectBinIndex >= 0 ? projectBinModel.itemTrackCount(projectBinIndex) : dropController.requiredTracksCount()
         let tracksIds = dropController.draggedTracksIds(trackId, trackCount);
-        // by this time, url list is already inside dropController
-        dropController.handleDroppedFiles(tracksIds, timeline.context.positionToTime(dropX))
+        if (projectBinIndex >= 0) {
+            projectBinModel.pasteItem(projectBinIndex, tracksIds, timeline.context.positionToTime(dropX))
+        } else {
+            // by this time, url list is already inside dropController
+            dropController.handleDroppedFiles(tracksIds, timeline.context.positionToTime(dropX))
+        }
 
         dropController.endImportDrag()
         drop.acceptProposedAction()
 
         root.setGuidelineRequested(-1, false)
         prv.lastProbedUrls = null
+        prv.lastProjectBinIndex = -1
+    }
+
+    function projectBinDropIndex(drop) {
+        if (!drop || !drop.source || !drop.source.projectBinDrag) {
+            return -1
+        }
+
+        return drop.source.projectBinIndex
     }
 }
