@@ -31,6 +31,7 @@ using DockName = QString;
 // Panels:
 static const DockName TRACKS_PANEL_NAME("tracksPanel");
 static const DockName HISTORY_PANEL_NAME("historyPanel");
+static const DockName PROJECT_BIN_PANEL_NAME("projectBinPanel");
 static const DockName PLAYBACK_METER_PANEL_NAME("playbackMeterPanel");
 
 // Toolbars:

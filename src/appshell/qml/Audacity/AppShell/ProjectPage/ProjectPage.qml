@@ -423,6 +423,38 @@ DockPage {
                 navigationSection: historyPanel.navigationSection
                 navigationOrderStart: historyPanel.contentNavigationPanelOrderStart
             }
+        },
+        DockPanel {
+            id: projectBinPanel
+
+            objectName: root.pageModel.projectBinPanelName()
+            title: qsTrc("appshell", "Project Bin")
+
+            navigationSection: root.navigationPanelSec(projectBinPanel.location)
+
+            readonly property bool horizontalDock: location === Location.Top || location === Location.Bottom
+
+            width: horizontalDock ? root.width : root.verticalPanelDefaultWidth
+            minimumWidth: horizontalDock ? 100 : root.verticalPanelDefaultWidth
+            maximumWidth: horizontalDock ? 100000 : root.verticalPanelDefaultWidth
+
+            height: horizontalDock ? 220 : root.height
+            minimumHeight: horizontalDock ? root.horizontalPanelMinHeight : 83
+            maximumHeight: horizontalDock ? root.horizontalPanelMaxHeight : 100000
+
+            groupName: horizontalDock
+                       ? root.horizontalPanelsGroup
+                       : root.verticalPanelsGroup
+            location: Location.Right
+
+            visible: true
+
+            dropDestinations: root.verticalPanelDropDestinations.concat(root.horizontalPanelDropDestinations)
+
+            ProjectBinPanel {
+                navigationSection: projectBinPanel.navigationSection
+                navigationOrderStart: projectBinPanel.contentNavigationPanelOrderStart
+            }
         }
     ]
 

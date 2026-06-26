@@ -299,6 +299,7 @@ MenuItem* AppMenuModel::makeViewMenu()
     viewItems << makeSeparator()
               << makeMenuItem("open-label-editor")
               << makeMenuItem("open-metadata-editor")
+              << makeMenuItem("toggle-project-bin")
               << makeMenuItem("toggle-history")
               << makeSeparator()
 #ifdef MUSE_MODULE_WORKSPACE

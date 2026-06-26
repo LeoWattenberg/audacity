@@ -272,6 +272,13 @@ const UiActionList ProjectUiActions::m_actions = {
              TranslatableString("action", "Show history"),
              Checkable::Yes
              ),
+    UiAction("toggle-project-bin",
+             au::context::UiCtxAny,
+             au::context::CTX_ANY,
+             TranslatableString("action", "Show project bin"),
+             TranslatableString("action", "Show project bin"),
+             Checkable::Yes
+             ),
 
     // record menu
     UiAction("set-up-timed-recording",
