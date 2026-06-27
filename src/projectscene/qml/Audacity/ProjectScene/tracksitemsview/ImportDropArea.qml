@@ -137,7 +137,7 @@ DropArea {
             projectBinIndex = prv.lastProjectBinIndex
         }
         let trackCount = projectBinIndex >= 0 ? projectBinModel.itemTrackCount(projectBinIndex) : dropController.requiredTracksCount()
-        let tracksIds = dropController.draggedTracksIds(trackId, trackCount);
+        let tracksIds = dropController.draggedTracksIds(trackId, trackCount)
         if (projectBinIndex >= 0) {
             projectBinModel.pasteItem(projectBinIndex, tracksIds, timeline.context.positionToTime(dropX))
         } else {
