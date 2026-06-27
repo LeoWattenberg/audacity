@@ -299,8 +299,6 @@ DockPage {
 
             minimumHeight: 83
 
-            groupName: root.verticalPanelsGroup
-
             location: Location.Left
 
             Column {
