@@ -51,6 +51,33 @@ void selectTrackForPreview(const std::shared_ptr<Track>& track)
         waveTrack->SetMute(false);
     }
 }
+
+bool accumulateWaveClipPeak(const WaveClip& waveClip, double time, double& peak)
+{
+    if (time < waveClip.Start() || time >= waveClip.End()) {
+        return false;
+    }
+
+    const auto sampleOffset = waveClip.TimeToSamples(time);
+    const double adjustedTime = waveClip.SamplesToTime(sampleOffset);
+    if (adjustedTime < waveClip.Start() || adjustedTime >= waveClip.End()) {
+        return false;
+    }
+
+    bool sampled = false;
+    for (size_t channel = 0; channel < waveClip.NChannels(); ++channel) {
+        float oneSample = 0.0f;
+        if (!WaveClipUtilities::GetFloatAtTime(waveClip, adjustedTime, channel, oneSample, false)) {
+            continue;
+        }
+
+        const double envelope = waveClip.GetEnvelope().GetValue(adjustedTime, 1.0 / waveClip.GetRate());
+        peak = std::max(peak, std::abs(static_cast<double>(oneSample) * envelope));
+        sampled = true;
+    }
+
+    return sampled;
+}
 }
 
 ProjectBin::ProjectBin(const muse::modularity::ContextPtr& ctx)
@@ -106,6 +133,7 @@ void ProjectBin::addFiles(const QStringList& fileUrls)
         item.path = fileInfo.path;
         item.duration = fileInfo.duration;
         item.trackCount = std::max(1, fileInfo.trackCount);
+        item.waveform = captureFileWaveform(item.path, item.duration);
 
         m_items.push_back(std::move(item));
         changed = true;
@@ -270,6 +298,7 @@ bool ProjectBin::locateMissingReference(int index)
     }
 
     item->path = muse::io::path_t(candidate);
+    item->waveform = captureFileWaveform(item->path, item->duration);
     m_itemsChanged.notify();
     return true;
 }
@@ -393,6 +422,82 @@ std::vector<double> ProjectBin::captureWaveform(const trackedit::ClipKey& clipKe
     return waveform;
 }
 
+std::vector<double> ProjectBin::captureFileWaveform(const muse::io::path_t& path, double duration) const
+{
+    TrackHolders tracks;
+    if (!importFileReferenceTracks(path, tracks)) {
+        return {};
+    }
+
+    return captureTrackWaveform(tracks, duration);
+}
+
+std::vector<double> ProjectBin::captureTrackWaveform(const std::vector<std::shared_ptr<Track> >& tracks, double duration) const
+{
+    if (tracks.empty() || duration <= 0.0) {
+        return {};
+    }
+
+    std::vector<double> waveform;
+    waveform.reserve(WAVEFORM_BUCKET_COUNT);
+
+    bool sampled = false;
+    for (int bucket = 0; bucket < WAVEFORM_BUCKET_COUNT; ++bucket) {
+        double peak = 0.0;
+        for (int sample = 0; sample < WAVEFORM_SAMPLES_PER_BUCKET; ++sample) {
+            const double ratio = (static_cast<double>(bucket) + ((static_cast<double>(sample) + 0.5) / WAVEFORM_SAMPLES_PER_BUCKET))
+                                 / WAVEFORM_BUCKET_COUNT;
+            const double time = duration * ratio;
+
+            for (const std::shared_ptr<Track>& track : tracks) {
+                const auto waveTrack = std::dynamic_pointer_cast<WaveTrack>(track);
+                if (!waveTrack) {
+                    continue;
+                }
+
+                for (const auto& waveClip : waveTrack->Intervals()) {
+                    if (waveClip) {
+                        sampled = accumulateWaveClipPeak(*waveClip, time, peak) || sampled;
+                    }
+                }
+            }
+        }
+
+        waveform.push_back(std::clamp(peak, 0.0, 1.0));
+    }
+
+    return sampled ? waveform : std::vector<double> {};
+}
+
+bool ProjectBin::importFileReferenceTracks(const muse::io::path_t& path, std::vector<std::shared_ptr<Track> >& tracks) const
+{
+    tracks.clear();
+
+    if (path.empty() || !QFileInfo::exists(path.toQString())) {
+        return false;
+    }
+
+    const project::IAudacityProjectPtr currentProject = globalContext()->currentProject();
+    if (!currentProject) {
+        return false;
+    }
+
+    Au3Project* au3Project = reinterpret_cast<Au3Project*>(currentProject->au3ProjectPtr());
+
+    auto oldTags = Tags::Get(*au3Project).shared_from_this();
+    auto newTags = oldTags->Duplicate();
+    Tags::Set(*au3Project, newTags);
+
+    std::optional<LibFileFormats::AcidizerTags> acidTags;
+    TranslatableString errorMessage;
+    const wxString wxPath = path.toString().toUtf8().constData();
+    const bool ok = Importer::Get().Import(*au3Project, wxPath, nullptr, &WaveTrackFactory::Get(*au3Project), tracks, newTags.get(),
+                                           acidTags, errorMessage);
+    Tags::Set(*au3Project, oldTags);
+
+    return ok && !tracks.empty();
+}
+
 trackedit::ClipKeyList ProjectBin::allProjectClipKeys() const
 {
     trackedit::ClipKeyList keys;
@@ -504,18 +609,7 @@ bool ProjectBin::previewFileReference(const ProjectBinItem& item)
     Au3Project* au3Project = reinterpret_cast<Au3Project*>(currentProject->au3ProjectPtr());
 
     TrackHolders tmpTracks;
-    auto oldTags = Tags::Get(*au3Project).shared_from_this();
-    auto newTags = oldTags->Duplicate();
-    Tags::Set(*au3Project, newTags);
-
-    std::optional<LibFileFormats::AcidizerTags> acidTags;
-    TranslatableString errorMessage;
-    const wxString wxPath = item.path.toString().toUtf8().constData();
-    const bool ok = Importer::Get().Import(*au3Project, wxPath, nullptr, &WaveTrackFactory::Get(*au3Project), tmpTracks, newTags.get(),
-                                           acidTags, errorMessage);
-    Tags::Set(*au3Project, oldTags);
-
-    if (!ok || tmpTracks.empty()) {
+    if (!importFileReferenceTracks(item.path, tmpTracks)) {
         return false;
     }
 
