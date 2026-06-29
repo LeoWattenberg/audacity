@@ -77,8 +77,9 @@ Rectangle {
                 mouseHelper.callUngrabMouseOnItem(mainMouseArea)
                 return
             }
-            if (root.hoveredItemKey) {
-                tracksItemsView.cancelItemDragEditRequested(root.hoveredItemKey)
+            let itemKey = mainMouseArea.lastItemClickKey || root.hoveredItemKey
+            if (itemKey) {
+                tracksItemsView.cancelItemDragEditRequested(itemKey)
             }
         }
 
@@ -608,7 +609,7 @@ Rectangle {
                 }
 
                 if (root.interactionState === TracksItemsView.State.DraggingItem && itemWasMoved) {
-                    tracksItemsView.itemMoveRequested(hoveredItemKey, false)
+                    tracksItemsView.itemMoveRequested(lastItemClickKey, false)
                     tracksItemsView.startAutoScroll()
                 } else {
                     selectionViewController.onPositionChanged(e.x, e.y)
@@ -635,15 +636,18 @@ Rectangle {
                     }
 
                     root.interactionState = TracksItemsView.State.Idle
-                    if (itemWasMoved) {
-                        tracksItemsView.itemMoveRequested(hoveredItemKey, true)
-                        tracksItemsView.stopAutoScroll()
-                    }
-                    tracksItemsView.itemEndEditRequested(hoveredItemKey)
-
                     if (droppedToProjectBin && root.projectBinDropTarget && root.projectBinDropTarget.moveTimelineClipToBin) {
-                        root.projectBinDropTarget.moveTimelineClipToBin(hoveredItemKey)
+                        tracksItemsView.cancelItemDragEditRequested(lastItemClickKey)
+                        tracksItemsView.stopAutoScroll()
+                        root.projectBinDropTarget.moveTimelineClipToBin(lastItemClickKey)
+                    } else {
+                        if (itemWasMoved) {
+                            tracksItemsView.itemMoveRequested(lastItemClickKey, true)
+                            tracksItemsView.stopAutoScroll()
+                        }
+                        tracksItemsView.itemEndEditRequested(lastItemClickKey)
                     }
+                    lastItemClickKey = null
                 } else {
                     splitToolController.mouseUp(e.x)
 
