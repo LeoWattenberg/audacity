@@ -47,6 +47,9 @@ public:
     virtual bool moveClipToBin(const trackedit::ClipKey& clipKey) = 0;
     virtual muse::Ret pasteItem(int index, const trackedit::TrackIdList& dstTrackIds, trackedit::secs_t startTime) = 0;
     virtual bool previewItem(int index) = 0;
+    virtual bool stopPreview() = 0;
+    virtual int previewingIndex() const = 0;
+    virtual muse::async::Notification previewStateChanged() const = 0;
     virtual bool renameItem(int index, const QString& title) = 0;
     virtual bool removeItem(int index) = 0;
     virtual int referenceCount(int index) const = 0;

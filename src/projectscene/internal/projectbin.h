@@ -10,7 +10,6 @@
 #include "importexport/import/iimporter.h"
 #include "interactive/iinteractive.h"
 #include "modularity/ioc.h"
-#include "playback/iplayback.h"
 #include "project/iaudacityproject.h"
 #include "trackedit/iclipsinteraction.h"
 #include "trackedit/iprojecthistory.h"
@@ -19,6 +18,7 @@
 
 #include "projectscene/iprojectbin.h"
 
+class QTimer;
 class Track;
 class TrackList;
 
@@ -28,7 +28,6 @@ class ProjectBin : public IProjectBin, public muse::Contextable, public muse::as
     muse::ContextInject<context::IGlobalContext> globalContext{ this };
     muse::ContextInject<importexport::IImporter> importer{ this };
     muse::ContextInject<muse::IInteractive> interactive{ this };
-    muse::ContextInject<playback::IPlayback> playback{ this };
     muse::ContextInject<trackedit::IClipsInteraction> clipsInteraction{ this };
     muse::ContextInject<trackedit::ITracksInteraction> tracksInteraction{ this };
     muse::ContextInject<trackedit::ISelectionController> selectionController{ this };
@@ -36,6 +35,7 @@ class ProjectBin : public IProjectBin, public muse::Contextable, public muse::as
 
 public:
     explicit ProjectBin(const muse::modularity::ContextPtr& ctx);
+    ~ProjectBin() override;
 
     void init();
 
@@ -46,6 +46,9 @@ public:
     bool moveClipToBin(const trackedit::ClipKey& clipKey) override;
     muse::Ret pasteItem(int index, const trackedit::TrackIdList& dstTrackIds, trackedit::secs_t startTime) override;
     bool previewItem(int index) override;
+    bool stopPreview() override;
+    int previewingIndex() const override;
+    muse::async::Notification previewStateChanged() const override;
     bool renameItem(int index, const QString& title) override;
     bool removeItem(int index) override;
     int referenceCount(int index) const override;
@@ -69,13 +72,19 @@ private:
     trackedit::ClipKeyList liveInstanceKeys(const ProjectBinItem& item) const;
     void addInstances(ProjectBinItem& item, const trackedit::ClipKeyList& before);
 
-    bool previewTrackData(const ProjectBinItem& item);
-    bool previewFileReference(const ProjectBinItem& item);
-    bool playPreviewTracks(const std::shared_ptr<TrackList>& tracks, double endTime);
+    bool previewTrackData(int index, const ProjectBinItem& item);
+    bool previewFileReference(int index, const ProjectBinItem& item);
+    bool playPreviewTracks(int index, const std::shared_ptr<TrackList>& tracks, double endTime);
+    void pollPreview();
     void clearPreviewTracks();
+    void notifyPreviewStateChanged();
 
     std::vector<ProjectBinItem> m_items;
     muse::async::Notification m_itemsChanged;
+    muse::async::Notification m_previewStateChanged;
     std::shared_ptr<TrackList> m_previewTracks;
+    std::unique_ptr<QTimer> m_previewPollTimer;
+    int m_previewToken = 0;
+    int m_previewingIndex = -1;
 };
 }

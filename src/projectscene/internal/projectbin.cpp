@@ -10,6 +10,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QTimer>
 #include <QUrl>
 
 #include "async/async.h"
@@ -18,10 +19,14 @@
 #include "trackedit/dom/clip.h"
 #include "trackedit/internal/au3/au3trackdata.h"
 
+#include "au3-audio-io/AudioIO.h"
+#include "au3-audio-io/ProjectAudioIO.h"
 #include "au3-file-formats/AcidizerTags.h"
 #include "au3-import-export/Import.h"
+#include "au3-mixer/AudioIOSequences.h"
 #include "au3-mixer/Envelope.h"
 #include "au3-project/Project.h"
+#include "au3-stretching-sequence/StretchingSequence.h"
 #include "au3-tags/Tags.h"
 #include "au3-track/Track.h"
 #include "au3-wave-track/WaveClip.h"
@@ -29,8 +34,6 @@
 #include "au3-wave-track/WaveTrack.h"
 #include "au3wrap/au3types.h"
 #include "au3wrap/internal/domaccessor.h"
-#include "playback/iplayer.h"
-
 #include "log.h"
 
 using namespace au::projectscene;
@@ -80,6 +83,18 @@ bool accumulateWaveClipPeak(const WaveClip& waveClip, double time, double& peak)
 
     return sampled;
 }
+
+TransportSequences makePreviewTransportTracks(TrackList& trackList)
+{
+    TransportSequences result;
+    const auto range = trackList.Any<WaveTrack>() + &Track::Any;
+    for (auto pTrack : range) {
+        result.playbackSequences.push_back(
+            StretchingSequence::Create(*pTrack, pTrack->GetClipInterfaces()));
+    }
+
+    return result;
+}
 }
 
 ProjectBin::ProjectBin(const muse::modularity::ContextPtr& ctx)
@@ -87,9 +102,36 @@ ProjectBin::ProjectBin(const muse::modularity::ContextPtr& ctx)
 {
 }
 
+ProjectBin::~ProjectBin()
+{
+    if (m_previewPollTimer) {
+        m_previewPollTimer->stop();
+    }
+
+    const int token = m_previewToken;
+    m_previewToken = 0;
+    m_previewingIndex = -1;
+
+    AudioIO* audioIO = AudioIO::Get();
+    if (audioIO && token != 0 && audioIO->IsStreamActive(token)) {
+        audioIO->StopStream();
+    }
+
+    m_previewTracks.reset();
+}
+
 void ProjectBin::init()
 {
+    if (!m_previewPollTimer) {
+        m_previewPollTimer = std::make_unique<QTimer>();
+        m_previewPollTimer->setInterval(100);
+        QObject::connect(m_previewPollTimer.get(), &QTimer::timeout, m_previewPollTimer.get(), [this] {
+            pollPreview();
+        });
+    }
+
     globalContext()->currentProjectChanged().onNotify(this, [this] {
+        stopPreview();
         clearPreviewTracks();
         if (m_items.empty()) {
             return;
@@ -108,6 +150,16 @@ const std::vector<ProjectBinItem>& ProjectBin::items() const
 muse::async::Notification ProjectBin::itemsChanged() const
 {
     return m_itemsChanged;
+}
+
+muse::async::Notification ProjectBin::previewStateChanged() const
+{
+    return m_previewStateChanged;
+}
+
+int ProjectBin::previewingIndex() const
+{
+    return m_previewingIndex;
 }
 
 void ProjectBin::addFiles(const QStringList& fileUrls)
@@ -204,14 +256,48 @@ bool ProjectBin::previewItem(int index)
         return false;
     }
 
+    if (m_previewingIndex == index) {
+        return stopPreview();
+    }
+
+    stopPreview();
+
     switch (item->sourceType) {
     case ProjectBinItem::SourceType::FileReference:
-        return previewFileReference(*item);
+        return previewFileReference(index, *item);
     case ProjectBinItem::SourceType::TrackData:
-        return previewTrackData(*item);
+        return previewTrackData(index, *item);
     }
 
     return false;
+}
+
+bool ProjectBin::stopPreview()
+{
+    const bool hadPreview = m_previewToken != 0 || m_previewingIndex >= 0 || m_previewTracks;
+    if (!hadPreview) {
+        return false;
+    }
+
+    const int token = m_previewToken;
+    m_previewToken = 0;
+    m_previewingIndex = -1;
+
+    AudioIO* audioIO = AudioIO::Get();
+    if (audioIO && token != 0 && audioIO->IsStreamActive(token)) {
+        audioIO->StopStream();
+    }
+
+    if (audioIO && audioIO->IsBusy()) {
+        if (m_previewPollTimer) {
+            m_previewPollTimer->start();
+        }
+    } else {
+        clearPreviewTracks();
+    }
+
+    notifyPreviewStateChanged();
+    return true;
 }
 
 bool ProjectBin::renameItem(int index, const QString& title)
@@ -562,7 +648,7 @@ void ProjectBin::addInstances(ProjectBinItem& item, const trackedit::ClipKeyList
     m_itemsChanged.notify();
 }
 
-bool ProjectBin::previewTrackData(const ProjectBinItem& item)
+bool ProjectBin::previewTrackData(int index, const ProjectBinItem& item)
 {
     if (item.trackData.empty() || item.duration <= 0.0) {
         return false;
@@ -587,10 +673,10 @@ bool ProjectBin::previewTrackData(const ProjectBinItem& item)
         tracks->Add(previewTrack, TrackList::DoAssignId::No, TrackList::EventPublicationSynchrony::Synchronous);
     }
 
-    return playPreviewTracks(tracks, item.duration);
+    return playPreviewTracks(index, tracks, item.duration);
 }
 
-bool ProjectBin::previewFileReference(const ProjectBinItem& item)
+bool ProjectBin::previewFileReference(int index, const ProjectBinItem& item)
 {
     if (item.path.empty() || item.duration <= 0.0) {
         return false;
@@ -621,55 +707,90 @@ bool ProjectBin::previewFileReference(const ProjectBinItem& item)
         tracks->Add(track, TrackList::DoAssignId::No, TrackList::EventPublicationSynchrony::Synchronous);
     }
 
-    return playPreviewTracks(tracks, item.duration);
+    return playPreviewTracks(index, tracks, item.duration);
 }
 
-bool ProjectBin::playPreviewTracks(const std::shared_ptr<TrackList>& tracks, double endTime)
+bool ProjectBin::playPreviewTracks(int index, const std::shared_ptr<TrackList>& tracks, double endTime)
 {
     if (!tracks || tracks->empty() || endTime <= 0.0) {
         return false;
     }
 
-    const auto player = playback()->player();
-    if (!player) {
+    const project::IAudacityProjectPtr currentProject = globalContext()->currentProject();
+    if (!currentProject) {
         return false;
     }
 
-    player->stop();
-    clearPreviewTracks();
+    AudioIO* audioIO = AudioIO::Get();
+    if (!audioIO || audioIO->IsBusy()) {
+        return false;
+    }
+
+    TransportSequences sequences = makePreviewTransportTracks(*tracks);
+    if (sequences.playbackSequences.empty()) {
+        return false;
+    }
+
+    Au3Project* au3Project = reinterpret_cast<Au3Project*>(currentProject->au3ProjectPtr());
+    AudioIOStartStreamOptions options = ProjectAudioIO::GetDefaultOptions(*au3Project);
+    const int token = audioIO->StartStream(sequences, 0.0, endTime, endTime, options);
+    if (token == 0) {
+        LOGE() << "Project bin preview failed to start";
+        return false;
+    }
 
     m_previewTracks = tracks;
-    player->setLoopRegionActive(false);
-    player->setPlaybackRegion({ 0.0, endTime });
-
-    player->playbackStatusChanged().onReceive(this, [this](playback::PlaybackStatus status) {
-        if (status == playback::PlaybackStatus::Stopped) {
-            muse::async::Async::call(this, [this] {
-                clearPreviewTracks();
-            });
-        }
-    });
-
-    playback::PlayTracksOptions options;
-    options.selectedOnly = false;
-    options.isDefaultPolicy = false;
-
-    const muse::Ret ret = player->playTracks(*m_previewTracks, 0.0, endTime, options);
-    if (!ret) {
-        clearPreviewTracks();
-        LOGE() << "Project bin preview failed: " << ret.toString();
-        return false;
+    m_previewToken = token;
+    m_previewingIndex = index;
+    if (m_previewPollTimer) {
+        m_previewPollTimer->start();
     }
+    notifyPreviewStateChanged();
 
     return true;
 }
 
+void ProjectBin::pollPreview()
+{
+    if (m_previewToken == 0 && !m_previewTracks) {
+        if (m_previewPollTimer) {
+            m_previewPollTimer->stop();
+        }
+        return;
+    }
+
+    AudioIO* audioIO = AudioIO::Get();
+    if (audioIO) {
+        if (m_previewToken != 0 && audioIO->IsStreamActive(m_previewToken)) {
+            return;
+        }
+
+        if (audioIO->IsBusy()) {
+            return;
+        }
+    }
+
+    clearPreviewTracks();
+}
+
 void ProjectBin::clearPreviewTracks()
 {
-    const auto player = playback()->player();
-    if (player) {
-        player->playbackStatusChanged().disconnect(this);
+    const bool wasPreviewing = m_previewToken != 0 || m_previewingIndex >= 0;
+
+    if (m_previewPollTimer) {
+        m_previewPollTimer->stop();
     }
 
     m_previewTracks.reset();
+    m_previewToken = 0;
+    m_previewingIndex = -1;
+
+    if (wasPreviewing) {
+        notifyPreviewStateChanged();
+    }
+}
+
+void ProjectBin::notifyPreviewStateChanged()
+{
+    m_previewStateChanged.notify();
 }

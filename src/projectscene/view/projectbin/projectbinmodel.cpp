@@ -43,6 +43,8 @@ QVariant ProjectBinModel::data(const QModelIndex& index, int role) const
         return projectBin()->referenceCount(index.row());
     case MissingRole:
         return projectBin()->isMissing(index.row());
+    case PreviewingRole:
+        return projectBin()->previewingIndex() == index.row();
     default:
         return {};
     }
@@ -66,6 +68,7 @@ QHash<int, QByteArray> ProjectBinModel::roleNames() const
         { HasWaveformRole, "hasWaveform" },
         { ReferenceCountRole, "referenceCount" },
         { MissingRole, "missing" },
+        { PreviewingRole, "previewing" },
     };
 }
 
@@ -76,6 +79,10 @@ void ProjectBinModel::init()
     }
 
     projectBin()->itemsChanged().onNotify(this, [this] {
+        reload();
+    });
+
+    projectBin()->previewStateChanged().onNotify(this, [this] {
         reload();
     });
 
@@ -154,6 +161,11 @@ void ProjectBinModel::pasteItem(int index, const QVariantList& trackIds, double 
 bool ProjectBinModel::previewItem(int index)
 {
     return projectBin()->previewItem(index);
+}
+
+bool ProjectBinModel::stopPreview()
+{
+    return projectBin()->stopPreview();
 }
 
 bool ProjectBinModel::renameItem(int index, const QString& title)

@@ -178,15 +178,19 @@ Item {
                         height: 28
                         minWidth: 28
                         margins: 0
-                        icon: IconCode.PLAY
+                        icon: model.previewing ? IconCode.STOP_FILL : IconCode.PLAY_FILL
                         buttonType: FlatButton.IconOnly
-                        toolTipTitle: qsTrc("projectbin", "Preview")
+                        toolTipTitle: model.previewing ? qsTrc("projectbin", "Stop preview") : qsTrc("projectbin", "Preview")
 
                         navigation.panel: navPanel
                         navigation.order: delegateRoot.binIndex * 8
 
                         onClicked: {
-                            projectBinModel.previewItem(delegateRoot.binIndex)
+                            if (model.previewing) {
+                                projectBinModel.stopPreview()
+                            } else {
+                                projectBinModel.previewItem(delegateRoot.binIndex)
+                            }
                         }
                     }
 
