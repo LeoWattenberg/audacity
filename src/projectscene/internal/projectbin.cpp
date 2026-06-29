@@ -18,7 +18,9 @@
 #include "trackedit/dom/clip.h"
 #include "trackedit/internal/au3/au3trackdata.h"
 
+#include "au3-file-formats/AcidizerTags.h"
 #include "au3-import-export/Import.h"
+#include "au3-mixer/Envelope.h"
 #include "au3-project/Project.h"
 #include "au3-tags/Tags.h"
 #include "au3-track/Track.h"
