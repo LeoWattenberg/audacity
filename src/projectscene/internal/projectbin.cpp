@@ -4,12 +4,17 @@
 #include "projectbin.h"
 
 #include <algorithm>
-#include <cmath>
 #include <memory>
 #include <optional>
 
+#include <QBuffer>
+#include <QByteArray>
+#include <QColor>
 #include <QDir>
 #include <QFileInfo>
+#include <QImage>
+#include <QIODevice>
+#include <QPainter>
 #include <QTimer>
 #include <QUrl>
 
@@ -30,18 +35,61 @@
 #include "au3-tags/Tags.h"
 #include "au3-track/Track.h"
 #include "au3-wave-track/WaveClip.h"
-#include "au3-wave-track/WaveClipUtilities.h"
 #include "au3-wave-track/WaveTrack.h"
 #include "au3wrap/au3types.h"
 #include "au3wrap/internal/domaccessor.h"
 #include "log.h"
+#include "view/tracksitemsview/au3/WaveformPainter.h"
 
 using namespace au::projectscene;
 using namespace au::au3;
 
 namespace {
-constexpr int WAVEFORM_BUCKET_COUNT = 48;
-constexpr int WAVEFORM_SAMPLES_PER_BUCKET = 8;
+constexpr int PREVIEW_IMAGE_WIDTH = 480;
+constexpr int PREVIEW_IMAGE_HEIGHT = 270;
+
+const QColor PREVIEW_BACKGROUND_COLOR(240, 243, 255);
+const QColor PREVIEW_SELECTED_BACKGROUND_COLOR(170, 195, 242);
+const QColor PREVIEW_SAMPLE_COLOR(100, 100, 211);
+const QColor PREVIEW_SELECTED_SAMPLE_COLOR(103, 124, 228);
+const QColor PREVIEW_RMS_COLOR(151, 151, 253);
+const QColor PREVIEW_CLIPPING_COLOR(239, 71, 111);
+const QColor PREVIEW_SEPARATOR_COLOR(191, 198, 218);
+
+graphics::Color colorFromQColor(const QColor& color)
+{
+    return graphics::Color(color.red(), color.green(), color.blue(), color.alpha());
+}
+
+WavePaintParameters previewPaintParameters(const WaveClip& waveClip, int height)
+{
+    WavePaintParameters paintParameters;
+    paintParameters
+    .SetDisplayParameters(height, -1.0, 1.0, false)
+    .SetDBParameters(60.0, false)
+    .SetBlankColor(colorFromQColor(PREVIEW_BACKGROUND_COLOR))
+    .SetZeroLineColor(colorFromQColor(PREVIEW_SAMPLE_COLOR))
+    .SetShowRMS(true)
+    .SetSampleColors(colorFromQColor(PREVIEW_SAMPLE_COLOR), colorFromQColor(PREVIEW_SELECTED_SAMPLE_COLOR))
+    .SetRMSColors(colorFromQColor(PREVIEW_RMS_COLOR), colorFromQColor(PREVIEW_RMS_COLOR))
+    .SetBackgroundColors(colorFromQColor(PREVIEW_BACKGROUND_COLOR), colorFromQColor(PREVIEW_SELECTED_BACKGROUND_COLOR))
+    .SetClippingColors(colorFromQColor(PREVIEW_CLIPPING_COLOR), colorFromQColor(PREVIEW_CLIPPING_COLOR))
+    .SetEnvelopeColors(colorFromQColor(PREVIEW_BACKGROUND_COLOR), colorFromQColor(PREVIEW_SELECTED_BACKGROUND_COLOR))
+    .SetEnvelope(waveClip.GetEnvelope());
+
+    return paintParameters;
+}
+
+QString imageDataUrl(const QImage& image)
+{
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    if (!buffer.open(QIODevice::WriteOnly) || !image.save(&buffer, "PNG")) {
+        return {};
+    }
+
+    return QStringLiteral("data:image/png;base64,") + QString::fromLatin1(bytes.toBase64());
+}
 
 void selectTrackForPreview(const std::shared_ptr<Track>& track)
 {
@@ -55,33 +103,6 @@ void selectTrackForPreview(const std::shared_ptr<Track>& track)
         waveTrack->MoveTo(0.0);
         waveTrack->SetMute(false);
     }
-}
-
-bool accumulateWaveClipPeak(const WaveClip& waveClip, double time, double& peak)
-{
-    if (time < waveClip.Start() || time >= waveClip.End()) {
-        return false;
-    }
-
-    const auto sampleOffset = waveClip.TimeToSamples(time);
-    const double adjustedTime = waveClip.SamplesToTime(sampleOffset);
-    if (adjustedTime < waveClip.Start() || adjustedTime >= waveClip.End()) {
-        return false;
-    }
-
-    bool sampled = false;
-    for (size_t channel = 0; channel < waveClip.NChannels(); ++channel) {
-        float oneSample = 0.0f;
-        if (!WaveClipUtilities::GetFloatAtTime(waveClip, adjustedTime, channel, oneSample, false)) {
-            continue;
-        }
-
-        const double envelope = waveClip.GetEnvelope().GetValue(adjustedTime, 1.0 / waveClip.GetRate());
-        peak = std::max(peak, std::abs(static_cast<double>(oneSample) * envelope));
-        sampled = true;
-    }
-
-    return sampled;
 }
 
 TransportSequences makePreviewTransportTracks(TrackList& trackList)
@@ -187,7 +208,7 @@ void ProjectBin::addFiles(const QStringList& fileUrls)
         item.path = fileInfo.path;
         item.duration = fileInfo.duration;
         item.trackCount = std::max(1, fileInfo.trackCount);
-        item.waveform = captureFileWaveform(item.path, item.duration);
+        item.previewImage = renderFilePreview(item.path, item.duration);
 
         m_items.push_back(std::move(item));
         changed = true;
@@ -210,7 +231,7 @@ bool ProjectBin::moveClipToBin(const trackedit::ClipKey& clipKey)
         return false;
     }
 
-    std::vector<double> waveform = captureWaveform(clipKey);
+    QString previewImage = renderClipPreview(clipKey);
 
     trackedit::ITrackDataPtr data = clipsInteraction()->cutClip(clipKey);
     if (!data) {
@@ -222,7 +243,7 @@ bool ProjectBin::moveClipToBin(const trackedit::ClipKey& clipKey)
     item.title = clip.title.empty() ? QString::fromStdString("Clip") : clip.title.toQString();
     item.duration = std::max(0.0, clip.endTime - clip.startTime);
     item.trackCount = 1;
-    item.waveform = std::move(waveform);
+    item.previewImage = std::move(previewImage);
     item.trackData.push_back(std::move(data));
 
     m_items.push_back(std::move(item));
@@ -386,7 +407,7 @@ bool ProjectBin::locateMissingReference(int index)
     }
 
     item->path = muse::io::path_t(candidate);
-    item->waveform = captureFileWaveform(item->path, item->duration);
+    item->previewImage = renderFilePreview(item->path, item->duration);
     m_itemsChanged.notify();
     return true;
 }
@@ -456,7 +477,7 @@ muse::Ret ProjectBin::pasteTrackData(ProjectBinItem& item, const trackedit::Trac
     return ret;
 }
 
-std::vector<double> ProjectBin::captureWaveform(const trackedit::ClipKey& clipKey) const
+QString ProjectBin::renderClipPreview(const trackedit::ClipKey& clipKey) const
 {
     const project::IAudacityProjectPtr project = globalContext()->currentProject();
     if (!project || !clipKey.isValid()) {
@@ -474,87 +495,107 @@ std::vector<double> ProjectBin::captureWaveform(const trackedit::ClipKey& clipKe
         return {};
     }
 
-    const double start = waveClip->Start();
-    const double end = waveClip->End();
-    const double duration = end - start;
+    const double duration = waveClip->End() - waveClip->Start();
     if (duration <= 0.0) {
         return {};
     }
 
-    std::vector<double> waveform;
-    waveform.reserve(WAVEFORM_BUCKET_COUNT);
-
-    for (int bucket = 0; bucket < WAVEFORM_BUCKET_COUNT; ++bucket) {
-        double peak = 0.0;
-        for (int sample = 0; sample < WAVEFORM_SAMPLES_PER_BUCKET; ++sample) {
-            const double ratio = (static_cast<double>(bucket) + ((static_cast<double>(sample) + 0.5) / WAVEFORM_SAMPLES_PER_BUCKET))
-                                 / WAVEFORM_BUCKET_COUNT;
-            const double time = start + (duration * ratio);
-            const auto sampleOffset = waveClip->TimeToSamples(time);
-            const double adjustedTime = waveClip->SamplesToTime(sampleOffset);
-
-            for (size_t channel = 0; channel < waveClip->NChannels(); ++channel) {
-                float oneSample = 0.0f;
-                if (!WaveClipUtilities::GetFloatAtTime(*waveClip, adjustedTime, channel, oneSample, false)) {
-                    continue;
-                }
-
-                const double envelope = waveClip->GetEnvelope().GetValue(adjustedTime, 1.0 / waveClip->GetRate());
-                peak = std::max(peak, std::abs(static_cast<double>(oneSample) * envelope));
-            }
-        }
-
-        waveform.push_back(std::clamp(peak, 0.0, 1.0));
+    std::shared_ptr<Track> track = waveTrack->Copy(waveClip->Start(), waveClip->End());
+    if (!track) {
+        return {};
     }
 
-    return waveform;
+    return renderTrackPreview({ track }, duration);
 }
 
-std::vector<double> ProjectBin::captureFileWaveform(const muse::io::path_t& path, double duration) const
+QString ProjectBin::renderFilePreview(const muse::io::path_t& path, double duration) const
 {
     TrackHolders tracks;
     if (!importFileReferenceTracks(path, tracks)) {
         return {};
     }
 
-    return captureTrackWaveform(tracks, duration);
+    return renderTrackPreview(tracks, duration);
 }
 
-std::vector<double> ProjectBin::captureTrackWaveform(const std::vector<std::shared_ptr<Track> >& tracks, double duration) const
+QString ProjectBin::renderTrackPreview(const std::vector<std::shared_ptr<Track> >& tracks, double duration) const
 {
     if (tracks.empty() || duration <= 0.0) {
         return {};
     }
 
-    std::vector<double> waveform;
-    waveform.reserve(WAVEFORM_BUCKET_COUNT);
+    size_t channelCount = 0;
+    for (const std::shared_ptr<Track>& track : tracks) {
+        const auto waveTrack = std::dynamic_pointer_cast<WaveTrack>(track);
+        if (!waveTrack || waveTrack->Intervals().empty()) {
+            continue;
+        }
 
-    bool sampled = false;
-    for (int bucket = 0; bucket < WAVEFORM_BUCKET_COUNT; ++bucket) {
-        double peak = 0.0;
-        for (int sample = 0; sample < WAVEFORM_SAMPLES_PER_BUCKET; ++sample) {
-            const double ratio = (static_cast<double>(bucket) + ((static_cast<double>(sample) + 0.5) / WAVEFORM_SAMPLES_PER_BUCKET))
-                                 / WAVEFORM_BUCKET_COUNT;
-            const double time = duration * ratio;
+        channelCount += std::max<size_t>(1, waveTrack->NChannels());
+    }
 
-            for (const std::shared_ptr<Track>& track : tracks) {
-                const auto waveTrack = std::dynamic_pointer_cast<WaveTrack>(track);
-                if (!waveTrack) {
+    if (channelCount == 0) {
+        return {};
+    }
+
+    QImage image(PREVIEW_IMAGE_WIDTH, PREVIEW_IMAGE_HEIGHT, QImage::Format_RGB888);
+    image.fill(PREVIEW_BACKGROUND_COLOR);
+
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
+    int channelRow = 0;
+    bool rendered = false;
+    for (const std::shared_ptr<Track>& track : tracks) {
+        const auto waveTrack = std::dynamic_pointer_cast<WaveTrack>(track);
+        if (!waveTrack || waveTrack->Intervals().empty()) {
+            continue;
+        }
+
+        const size_t trackChannels = std::max<size_t>(1, waveTrack->NChannels());
+        for (size_t channel = 0; channel < trackChannels; ++channel) {
+            const int top = static_cast<int>((static_cast<int64_t>(channelRow) * PREVIEW_IMAGE_HEIGHT) / channelCount);
+            const int bottom = static_cast<int>((static_cast<int64_t>(channelRow + 1) * PREVIEW_IMAGE_HEIGHT) / channelCount);
+            const int height = std::max(1, bottom - top);
+
+            if (channelRow > 0) {
+                painter.fillRect(0, top, PREVIEW_IMAGE_WIDTH, 1, PREVIEW_SEPARATOR_COLOR);
+            }
+
+            for (const auto& waveClip : waveTrack->Intervals()) {
+                if (!waveClip || channel >= waveClip->NChannels() || waveClip->IsEmpty()) {
                     continue;
                 }
 
-                for (const auto& waveClip : waveTrack->Intervals()) {
-                    if (waveClip) {
-                        sampled = accumulateWaveClipPeak(*waveClip, time, peak) || sampled;
-                    }
+                const double clipStart = std::max(0.0, waveClip->Start());
+                const double clipEnd = std::min(duration, waveClip->End());
+                if (clipEnd <= clipStart) {
+                    continue;
                 }
-            }
-        }
 
-        waveform.push_back(std::clamp(peak, 0.0, 1.0));
+                WaveMetrics metrics;
+                metrics.top = top;
+                metrics.left = clipStart * PREVIEW_IMAGE_WIDTH / duration;
+                metrics.height = height;
+                metrics.width = (clipEnd - clipStart) * PREVIEW_IMAGE_WIDTH / duration;
+                metrics.zoom = PREVIEW_IMAGE_WIDTH / duration;
+                metrics.fromTime = (clipStart - waveClip->Start()) + waveClip->GetTrimLeft();
+                metrics.toTime = (clipEnd - waveClip->Start()) + waveClip->GetTrimLeft();
+                metrics.selectionStartTime = 0.0;
+                metrics.selectionEndTime = 0.0;
+
+                WavePaintParameters paintParameters = previewPaintParameters(*waveClip, height);
+                WaveformPainter::Get(*waveClip).Draw(channel, painter, paintParameters, metrics);
+                rendered = true;
+            }
+
+            ++channelRow;
+        }
     }
 
-    return sampled ? waveform : std::vector<double> {};
+    painter.end();
+
+    return rendered ? imageDataUrl(image) : QString {};
 }
 
 bool ProjectBin::importFileReferenceTracks(const muse::io::path_t& path, std::vector<std::shared_ptr<Track> >& tracks) const

@@ -35,10 +35,10 @@ QVariant ProjectBinModel::data(const QModelIndex& index, int role) const
         return item->trackCount;
     case SourceTypeRole:
         return static_cast<int>(item->sourceType);
-    case WaveformRole:
-        return waveformData(*item);
-    case HasWaveformRole:
-        return !item->waveform.empty();
+    case PreviewImageRole:
+        return item->previewImage;
+    case HasPreviewImageRole:
+        return !item->previewImage.isEmpty();
     case ReferenceCountRole:
         return projectBin()->referenceCount(index.row());
     case MissingRole:
@@ -64,8 +64,8 @@ QHash<int, QByteArray> ProjectBinModel::roleNames() const
         { DurationTextRole, "durationText" },
         { TrackCountRole, "trackCount" },
         { SourceTypeRole, "sourceType" },
-        { WaveformRole, "waveform" },
-        { HasWaveformRole, "hasWaveform" },
+        { PreviewImageRole, "previewImage" },
+        { HasPreviewImageRole, "hasPreviewImage" },
         { ReferenceCountRole, "referenceCount" },
         { MissingRole, "missing" },
         { PreviewingRole, "previewing" },
@@ -213,18 +213,6 @@ QString ProjectBinModel::durationText(double duration) const
 
     return QString::number(minutes) + QStringLiteral(":")
            + QStringLiteral("%1").arg(seconds, 2, 10, QLatin1Char('0'));
-}
-
-QVariantList ProjectBinModel::waveformData(const ProjectBinItem& item) const
-{
-    QVariantList values;
-    values.reserve(static_cast<int>(item.waveform.size()));
-
-    for (double value : item.waveform) {
-        values.push_back(value);
-    }
-
-    return values;
 }
 
 void ProjectBinModel::reload()

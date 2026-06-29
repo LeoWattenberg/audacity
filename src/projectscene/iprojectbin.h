@@ -28,7 +28,7 @@ struct ProjectBinItem
     muse::io::path_t path;
     double duration = 0.0;
     int trackCount = 1;
-    std::vector<double> waveform;
+    QString previewImage;
     trackedit::ClipKeyList instanceKeys;
     std::vector<trackedit::ITrackDataPtr> trackData;
 };

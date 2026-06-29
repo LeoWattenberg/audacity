@@ -27,8 +27,8 @@ public:
         DurationTextRole,
         TrackCountRole,
         SourceTypeRole,
-        WaveformRole,
-        HasWaveformRole,
+        PreviewImageRole,
+        HasPreviewImageRole,
         ReferenceCountRole,
         MissingRole,
         PreviewingRole
@@ -60,7 +60,6 @@ signals:
 private:
     const ProjectBinItem* itemAt(int index) const;
     QString durationText(double duration) const;
-    QVariantList waveformData(const ProjectBinItem& item) const;
     void reload();
 
     bool m_inited = false;

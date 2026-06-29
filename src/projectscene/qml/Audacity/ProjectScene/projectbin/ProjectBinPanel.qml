@@ -110,23 +110,15 @@ Item {
                     readonly property bool thumbnailMode: root.viewMode === ProjectBinPanel.Thumbnail
                     readonly property bool compactMode: root.viewMode === ProjectBinPanel.Compact
                     readonly property bool listMode: root.viewMode === ProjectBinPanel.List
-                    readonly property bool hasWaveformData: model.hasWaveform
-                    readonly property var waveformData: model.waveform
+                    readonly property bool hasPreviewImage: model.hasPreviewImage
+                    readonly property string previewImage: model.previewImage
                     readonly property int leftColumnWidth: 34
                     readonly property int horizontalPadding: 8
                     readonly property int actionsWidth: 108
-                    readonly property int waveformBarCount: hasWaveformData && waveformData ? waveformData.length : 18
                     readonly property int clipWidth: Math.max(1, width - leftColumnWidth - (2 * horizontalPadding))
                     readonly property int clipHeight: thumbnailMode ? Math.round(clipWidth * 9 / 16) : compactMode ? 32 : 28
                     property bool editingTitle: false
 
-                    function waveformLevel(barIndex) {
-                        if (hasWaveformData && waveformData && barIndex < waveformData.length) {
-                            return Math.max(0.08, Math.min(1, waveformData[barIndex]))
-                        }
-
-                        return 0.24 + ((barIndex * 7) % 11) / 18
-                    }
 
                     function beginRename() {
                         editingTitle = true
@@ -278,9 +270,25 @@ Item {
                             }
                         }
 
-                        Row {
-                            id: waveform
+                        Image {
+                            id: previewImage
 
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: header.visible ? header.bottom : parent.top
+                            anchors.bottom: parent.bottom
+                            anchors.leftMargin: delegateRoot.listMode ? 0 : 1
+                            anchors.rightMargin: delegateRoot.listMode ? 0 : 1
+                            anchors.bottomMargin: delegateRoot.listMode ? 0 : 1
+
+                            visible: !delegateRoot.listMode && delegateRoot.hasPreviewImage
+                            source: delegateRoot.previewImage
+                            fillMode: Image.Stretch
+                            cache: false
+                            smooth: false
+                        }
+
+                        Rectangle {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.top: header.visible ? header.bottom : parent.top
@@ -288,19 +296,14 @@ Item {
                             anchors.leftMargin: delegateRoot.listMode ? 0 : 8
                             anchors.rightMargin: delegateRoot.listMode ? 0 : 8
 
-                            visible: !delegateRoot.listMode
-                            spacing: Math.max(2, Math.floor(width / 58))
+                            visible: !delegateRoot.listMode && !delegateRoot.hasPreviewImage
+                            color: "transparent"
 
-                            Repeater {
-                                model: delegateRoot.waveformBarCount
-
-                                Rectangle {
-                                    width: Math.max(2, Math.floor((waveform.width - (waveform.spacing * (delegateRoot.waveformBarCount - 1))) / Math.max(1, delegateRoot.waveformBarCount)))
-                                    height: Math.max(4, waveform.height * delegateRoot.waveformLevel(index))
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    radius: 1
-                                    color: ui.colorWithAlphaF(ui.theme.fontPrimaryColor, delegateRoot.hasWaveformData ? 0.52 : 0.38)
-                                }
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: parent.width
+                                height: 1
+                                color: ui.colorWithAlphaF(ui.theme.fontPrimaryColor, 0.24)
                             }
                         }
 

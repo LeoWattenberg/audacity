@@ -63,9 +63,9 @@ private:
     muse::Ret pasteFileReference(ProjectBinItem& item, const trackedit::TrackIdList& dstTrackIds, trackedit::secs_t startTime);
     muse::Ret pasteTrackData(ProjectBinItem& item, const trackedit::TrackIdList& dstTrackIds, trackedit::secs_t startTime);
 
-    std::vector<double> captureWaveform(const trackedit::ClipKey& clipKey) const;
-    std::vector<double> captureFileWaveform(const muse::io::path_t& path, double duration) const;
-    std::vector<double> captureTrackWaveform(const std::vector<std::shared_ptr<Track>>& tracks, double duration) const;
+    QString renderClipPreview(const trackedit::ClipKey& clipKey) const;
+    QString renderFilePreview(const muse::io::path_t& path, double duration) const;
+    QString renderTrackPreview(const std::vector<std::shared_ptr<Track>>& tracks, double duration) const;
     bool importFileReferenceTracks(const muse::io::path_t& path, std::vector<std::shared_ptr<Track>>& tracks) const;
     trackedit::ClipKeyList allProjectClipKeys() const;
     trackedit::ClipKeyList addedClipKeys(const trackedit::ClipKeyList& before) const;
