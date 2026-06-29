@@ -500,7 +500,7 @@ bool ProjectBin::importFileReferenceTracks(const muse::io::path_t& path, std::ve
     return ok && !tracks.empty();
 }
 
-trackedit::ClipKeyList ProjectBin::allProjectClipKeys() const
+au::trackedit::ClipKeyList ProjectBin::allProjectClipKeys() const
 {
     trackedit::ClipKeyList keys;
     const trackedit::ITrackeditProjectPtr project = globalContext()->currentTrackeditProject();
@@ -519,7 +519,7 @@ trackedit::ClipKeyList ProjectBin::allProjectClipKeys() const
     return keys;
 }
 
-trackedit::ClipKeyList ProjectBin::addedClipKeys(const trackedit::ClipKeyList& before) const
+au::trackedit::ClipKeyList ProjectBin::addedClipKeys(const trackedit::ClipKeyList& before) const
 {
     trackedit::ClipKeyList added;
     const trackedit::ClipKeyList after = allProjectClipKeys();
@@ -533,7 +533,7 @@ trackedit::ClipKeyList ProjectBin::addedClipKeys(const trackedit::ClipKeyList& b
     return added;
 }
 
-trackedit::ClipKeyList ProjectBin::liveInstanceKeys(const ProjectBinItem& item) const
+au::trackedit::ClipKeyList ProjectBin::liveInstanceKeys(const ProjectBinItem& item) const
 {
     trackedit::ClipKeyList live;
     const trackedit::ITrackeditProjectPtr project = globalContext()->currentTrackeditProject();
