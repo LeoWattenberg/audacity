@@ -43,6 +43,10 @@ Item {
         return projectBinModel.moveClipToBin(clipKey)
     }
 
+    function isTimelineClipDrop(drop) {
+        return drop && drop.source && drop.source.timelineClipDrag && drop.source.timelineClipKey
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -118,7 +122,6 @@ Item {
                     readonly property int clipWidth: Math.max(1, width - leftColumnWidth - (2 * horizontalPadding))
                     readonly property int clipHeight: thumbnailMode ? Math.round(clipWidth * 9 / 16) : compactMode ? 32 : 28
                     property bool editingTitle: false
-
 
                     function beginRename() {
                         editingTitle = true
@@ -495,12 +498,23 @@ Item {
                 anchors.fill: parent
 
                 onEntered: function (drop) {
+                    if (root.isTimelineClipDrop(drop)) {
+                        drop.acceptProposedAction()
+                        return
+                    }
+
                     if (drop.urls && drop.urls.length > 0) {
                         drop.acceptProposedAction()
                     }
                 }
 
                 onDropped: function (drop) {
+                    if (root.isTimelineClipDrop(drop)) {
+                        drop.source.timelineClipDroppedOnProjectBin = true
+                        drop.acceptProposedAction()
+                        return
+                    }
+
                     if (drop.urls && drop.urls.length > 0) {
                         projectBinModel.addFiles(drop.urls)
                         drop.acceptProposedAction()
