@@ -460,7 +460,6 @@ DockPage {
         id: tracksItemsView
 
         navPanels: tracksNavModel.viewItemPanels
-        projectBinDropTarget: projectBinContent
 
         Connections {
             target: root

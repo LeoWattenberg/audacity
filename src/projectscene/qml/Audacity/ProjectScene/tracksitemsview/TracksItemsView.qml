@@ -14,7 +14,6 @@ Rectangle {
     id: root
 
     property var navPanels: null
-    property var projectBinDropTarget: null
 
     property bool itemHovered: false
     property bool itemHeaderHovered: false
@@ -81,21 +80,6 @@ Rectangle {
             if (itemKey) {
                 tracksItemsView.cancelItemDragEditRequested(itemKey)
             }
-        }
-
-        function canStartClipDrag() {
-            return root.hoveredItemKey !== null && (root.itemHeaderHovered || root.itemHovered) && !root.isSplitMode && !content.isBrush && !content.isIsolationMode && !content.isNearSample && !content.leftTrimContainsMouse && !content.rightTrimContainsMouse && !content.leftTrimPressedButtons && !content.rightTrimPressedButtons
-        }
-
-        function startClipDrag(itemKey, position, startedFromHeader) {
-            tracksItemsView.itemStartEditRequested(itemKey)
-            root.interactionState = TracksItemsView.State.DraggingItem
-            mainMouseArea.lastItemClickKey = itemKey
-            mainMouseArea.clipDragStartedFromHeader = startedFromHeader
-            mainMouseArea.itemWasMoved = false
-            timelineClipDragSource.timelineClipDroppedOnProjectBin = false
-            timelineClipDragSource.x = position.x
-            timelineClipDragSource.y = position.y
         }
 
         function setGuidelinePosition(time) {
@@ -561,7 +545,6 @@ Rectangle {
 
             property var lastItemClickKey: null
             property bool itemWasMoved: false
-            property bool clipDragStartedFromHeader: false
             property point pressStartPosition: Qt.point(0, 0)
             readonly property int moveThreshold: 5
 
@@ -575,8 +558,10 @@ Rectangle {
                 }
 
                 if (e.button === Qt.LeftButton) {
-                    if (prv.canStartClipDrag()) {
-                        prv.startClipDrag(root.hoveredItemKey, Qt.point(e.x, e.y), root.itemHeaderHovered)
+                    if (root.itemHeaderHovered) {
+                        tracksItemsView.itemStartEditRequested(root.hoveredItemKey)
+                        root.interactionState = TracksItemsView.State.DraggingItem
+                        lastItemClickKey = root.hoveredItemKey
                     } else {
                         content.forceActiveFocus()
 
@@ -600,9 +585,6 @@ Rectangle {
                     }
 
                     itemWasMoved = false
-                    if (root.interactionState !== TracksItemsView.State.DraggingItem) {
-                        clipDragStartedFromHeader = false
-                    }
                     pressStartPosition = Qt.point(e.x, e.y)
                 } else if (e.button === Qt.RightButton) {
                     if (tracksHovered)
@@ -617,11 +599,6 @@ Rectangle {
                 timeline.updateCursorPosition(e.x, e.y)
                 splitToolController.mouseMove(e.x)
 
-                if (root.interactionState === TracksItemsView.State.DraggingItem) {
-                    timelineClipDragSource.x = e.x
-                    timelineClipDragSource.y = e.y
-                }
-
                 if (root.interactionState === TracksItemsView.State.DraggingItem && !itemWasMoved) {
                     var dx = Math.abs(e.x - pressStartPosition.x)
                     var dy = Math.abs(e.y - pressStartPosition.y)
@@ -630,7 +607,7 @@ Rectangle {
                     }
                 }
 
-                if (root.interactionState === TracksItemsView.State.DraggingItem && itemWasMoved && clipDragStartedFromHeader) {
+                if (root.interactionState === TracksItemsView.State.DraggingItem && itemWasMoved) {
                     tracksItemsView.itemMoveRequested(lastItemClickKey, false)
                     tracksItemsView.startAutoScroll()
                 } else {
@@ -652,29 +629,12 @@ Rectangle {
                 }
 
                 if (root.interactionState === TracksItemsView.State.DraggingItem) {
-                    if (itemWasMoved) {
-                        timelineClipDragSource.Drag.drop()
-                    }
-
-                    let droppedToProjectBin = timelineClipDragSource.timelineClipDroppedOnProjectBin
-                    if (!droppedToProjectBin && itemWasMoved && root.projectBinDropTarget && root.projectBinDropTarget.containsScenePoint) {
-                        droppedToProjectBin = root.projectBinDropTarget.containsScenePoint(mainMouseArea.mapToItem(null, e.x, e.y))
-                    }
-
                     root.interactionState = TracksItemsView.State.Idle
-                    if (droppedToProjectBin && root.projectBinDropTarget && root.projectBinDropTarget.moveTimelineClipToBin) {
-                        tracksItemsView.cancelItemDragEditRequested(lastItemClickKey)
+                    if (itemWasMoved) {
+                        tracksItemsView.itemMoveRequested(lastItemClickKey, true)
                         tracksItemsView.stopAutoScroll()
-                        root.projectBinDropTarget.moveTimelineClipToBin(lastItemClickKey)
-                    } else {
-                        if (itemWasMoved && clipDragStartedFromHeader) {
-                            tracksItemsView.itemMoveRequested(lastItemClickKey, true)
-                            tracksItemsView.stopAutoScroll()
-                        }
-                        tracksItemsView.itemEndEditRequested(lastItemClickKey)
                     }
-                    timelineClipDragSource.timelineClipDroppedOnProjectBin = false
-                    clipDragStartedFromHeader = false
+                    tracksItemsView.itemEndEditRequested(lastItemClickKey)
                     lastItemClickKey = null
                 } else {
                     splitToolController.mouseUp(e.x)
@@ -697,8 +657,6 @@ Rectangle {
 
             onCanceled: e => {
                 root.interactionState = TracksItemsView.State.Idle
-                clipDragStartedFromHeader = false
-                timelineClipDragSource.timelineClipDroppedOnProjectBin = false
                 prv.cancelItemDragEdit()
             }
 
@@ -730,23 +688,6 @@ Rectangle {
                 }
                 itemsSelection.visible = false
             }
-        }
-
-        Item {
-            id: timelineClipDragSource
-
-            property bool timelineClipDrag: true
-            property var timelineClipKey: mainMouseArea.lastItemClickKey
-            property bool timelineClipDroppedOnProjectBin: false
-
-            width: 1
-            height: 1
-            opacity: 0
-
-            Drag.active: root.interactionState === TracksItemsView.State.DraggingItem && mainMouseArea.itemWasMoved && timelineClipKey !== null
-            Drag.supportedActions: Qt.MoveAction
-            Drag.hotSpot.x: 0
-            Drag.hotSpot.y: 0
         }
 
         // Drives the snap guideline while hovering empty project space below the last track.

@@ -34,19 +34,6 @@ Item {
         Component.onCompleted: init()
     }
 
-    function containsScenePoint(scenePoint) {
-        let localPoint = root.mapFromItem(null, scenePoint.x, scenePoint.y)
-        return root.visible && root.enabled && localPoint.x >= 0 && localPoint.x <= root.width && localPoint.y >= 0 && localPoint.y <= root.height
-    }
-
-    function moveTimelineClipToBin(clipKey) {
-        return projectBinModel.moveClipToBin(clipKey)
-    }
-
-    function isTimelineClipDrop(drop) {
-        return drop && drop.source && drop.source.timelineClipDrag && drop.source.timelineClipKey
-    }
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -498,23 +485,12 @@ Item {
                 anchors.fill: parent
 
                 onEntered: function (drop) {
-                    if (root.isTimelineClipDrop(drop)) {
-                        drop.acceptProposedAction()
-                        return
-                    }
-
                     if (drop.urls && drop.urls.length > 0) {
                         drop.acceptProposedAction()
                     }
                 }
 
                 onDropped: function (drop) {
-                    if (root.isTimelineClipDrop(drop)) {
-                        drop.source.timelineClipDroppedOnProjectBin = true
-                        drop.acceptProposedAction()
-                        return
-                    }
-
                     if (drop.urls && drop.urls.length > 0) {
                         projectBinModel.addFiles(drop.urls)
                         drop.acceptProposedAction()
