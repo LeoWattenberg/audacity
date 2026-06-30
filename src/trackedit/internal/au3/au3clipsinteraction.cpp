@@ -39,6 +39,40 @@ using namespace au::au3;
 
 namespace {
 static const std::string mixingDownToMonoLabel = muse::trc("trackedit", "Mixing down to mono…");
+
+bool isAuxiliaryClip(const std::shared_ptr<IAuxiliaryTrackProvider>& provider, const ClipKey& key)
+{
+    return provider && provider->hasClip(key);
+}
+
+ClipKeyList filterAuxiliaryClips(const std::shared_ptr<IAuxiliaryTrackProvider>& provider, const ClipKeyList& keys, bool auxiliary)
+{
+    ClipKeyList result;
+    result.reserve(keys.size());
+
+    for (const ClipKey& key : keys) {
+        if (isAuxiliaryClip(provider, key) == auxiliary) {
+            result.push_back(key);
+        }
+    }
+
+    return result;
+}
+
+ClipKeyList mergeMovedClipKeys(const ClipKeyList& original, const ClipKeyList& oldKeys, const ClipKeyList& newKeys)
+{
+    ClipKeyList merged = original;
+    for (size_t i = 0; i < oldKeys.size() && i < newKeys.size(); ++i) {
+        for (ClipKey& key : merged) {
+            if (key == oldKeys[i]) {
+                key = newKeys[i];
+                break;
+            }
+        }
+    }
+
+    return merged;
+}
 }
 
 Au3ClipsInteraction::Au3ClipsInteraction(const muse::modularity::ContextPtr& ctx)
@@ -65,6 +99,10 @@ muse::async::Channel<au::trackedit::ClipKey, secs_t, bool> Au3ClipsInteraction::
 
 muse::secs_t Au3ClipsInteraction::clipStartTime(const trackedit::ClipKey& clipKey) const
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return auxiliaryTrackProvider()->clipStartTime(clipKey);
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     if (!waveTrack) {
         return -1.0;
@@ -80,6 +118,10 @@ muse::secs_t Au3ClipsInteraction::clipStartTime(const trackedit::ClipKey& clipKe
 
 muse::secs_t Au3ClipsInteraction::clipEndTime(const ClipKey& clipKey) const
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return auxiliaryTrackProvider()->clipEndTime(clipKey);
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     if (!waveTrack) {
         return -1.0;
@@ -95,6 +137,10 @@ muse::secs_t Au3ClipsInteraction::clipEndTime(const ClipKey& clipKey) const
 
 muse::secs_t Au3ClipsInteraction::clipDuration(const trackedit::ClipKey& clipKey) const
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return auxiliaryTrackProvider()->clipDuration(clipKey);
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return -1.0;
@@ -110,6 +156,14 @@ muse::secs_t Au3ClipsInteraction::clipDuration(const trackedit::ClipKey& clipKey
 
 bool Au3ClipsInteraction::changeClipStartTime(const trackedit::ClipKey& clipKey, secs_t newStartTime, bool completed)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        const bool ok = auxiliaryTrackProvider()->changeClipStartTime(clipKey, newStartTime, completed);
+        if (ok) {
+            m_clipStartTimeChanged.send(clipKey, newStartTime, completed);
+        }
+        return ok;
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -144,6 +198,10 @@ bool Au3ClipsInteraction::changeClipStartTime(const trackedit::ClipKey& clipKey,
 
 bool Au3ClipsInteraction::changeClipTitle(const trackedit::ClipKey& clipKey, const muse::String& newTitle)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return auxiliaryTrackProvider()->changeClipTitle(clipKey, newTitle);
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -165,6 +223,10 @@ bool Au3ClipsInteraction::changeClipTitle(const trackedit::ClipKey& clipKey, con
 
 bool Au3ClipsInteraction::changeClipPitch(const ClipKey& clipKey, int pitch)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return false;
+    }
+
     WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), ::TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -186,6 +248,10 @@ bool Au3ClipsInteraction::changeClipPitch(const ClipKey& clipKey, int pitch)
 
 bool Au3ClipsInteraction::resetClipPitch(const ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return false;
+    }
+
     WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), ::TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -217,6 +283,10 @@ bool Au3ClipsInteraction::resetClipSpeed(const ClipKey& clipKey)
 
 bool Au3ClipsInteraction::changeClipColor(const ClipKey& clipKey, ClipColorIndex colorIndex)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return auxiliaryTrackProvider()->changeClipColor(clipKey, colorIndex);
+    }
+
     WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), ::TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -237,6 +307,10 @@ bool Au3ClipsInteraction::changeClipColor(const ClipKey& clipKey, ClipColorIndex
 
 bool Au3ClipsInteraction::changeClipOptimizeForVoice(const ClipKey& clipKey, bool optimize)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return false;
+    }
+
     WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), ::TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -258,6 +332,10 @@ bool Au3ClipsInteraction::changeClipOptimizeForVoice(const ClipKey& clipKey, boo
 
 bool Au3ClipsInteraction::renderClipPitchAndSpeed(const ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return false;
+    }
+
     interactive()->showProgress(muse::trc("trackedit", "Rendering pitch and speed…"), m_progress);
     m_progress.start();
 
@@ -301,6 +379,10 @@ bool Au3ClipsInteraction::renderClipPitchAndSpeed(const ClipKey& clipKey)
 
 ITrackDataPtr Au3ClipsInteraction::cutClip(const ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return nullptr;
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return nullptr;
@@ -324,6 +406,10 @@ ITrackDataPtr Au3ClipsInteraction::cutClip(const ClipKey& clipKey)
 
 ITrackDataPtr Au3ClipsInteraction::copyClip(const ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return nullptr;
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return nullptr;
@@ -341,6 +427,10 @@ ITrackDataPtr Au3ClipsInteraction::copyClip(const ClipKey& clipKey)
 
 std::optional<TimeSpan> Au3ClipsInteraction::removeClip(const trackedit::ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return auxiliaryTrackProvider()->removeClip(clipKey);
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return std::nullopt;
@@ -368,7 +458,15 @@ bool Au3ClipsInteraction::removeClips(const ClipKeyList& clipKeyList, bool moveC
         return false;
     }
 
-    for (const auto& clipKey : clipKeyList) {
+    const ClipKeyList auxiliaryKeys = filterAuxiliaryClips(auxiliaryTrackProvider(), clipKeyList, true);
+    const ClipKeyList audioKeys = filterAuxiliaryClips(auxiliaryTrackProvider(), clipKeyList, false);
+
+    bool ok = true;
+    if (!auxiliaryKeys.empty()) {
+        ok = auxiliaryTrackProvider()->removeClips(auxiliaryKeys, moveClips) && ok;
+    }
+
+    for (const auto& clipKey : audioKeys) {
         Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
         IF_ASSERT_FAILED(waveTrack) {
             return false;
@@ -386,7 +484,7 @@ bool Au3ClipsInteraction::removeClips(const ClipKeyList& clipKeyList, bool moveC
         prj->notifyAboutTrackChanged(DomConverter::track(waveTrack));
     }
 
-    return true;
+    return ok;
 }
 
 muse::RetVal<ClipKeyList> Au3ClipsInteraction::moveClips(const ClipKeyList& clipKeyList, secs_t timePositionOffset,
@@ -403,6 +501,12 @@ muse::RetVal<ClipKeyList> Au3ClipsInteraction::moveClips(const ClipKeyList& clip
     const muse::Defer defer([&] { m_busy = false; });
 
     const trackedit::ITrackeditProjectPtr prj = globalContext()->currentTrackeditProject();
+    const ClipKeyList auxiliaryKeys = filterAuxiliaryClips(auxiliaryTrackProvider(), clipKeyList, true);
+    const ClipKeyList audioKeys = filterAuxiliaryClips(auxiliaryTrackProvider(), clipKeyList, false);
+
+    if (!auxiliaryKeys.empty() && audioKeys.empty()) {
+        return auxiliaryTrackProvider()->moveClips(auxiliaryKeys, timePositionOffset, 0, completed, clipsMovedToOtherTracks);
+    }
 
     if (!m_tracksWhenDragStarted) {
         m_tracksWhenDragStarted.emplace(utils::getTrackListInfo(Au3TrackList::Get(projectRef())));
@@ -417,7 +521,7 @@ muse::RetVal<ClipKeyList> Au3ClipsInteraction::moveClips(const ClipKeyList& clip
         }
     }
 
-    for (const auto& selectedClip : clipKeyList) {
+    for (const auto& selectedClip : audioKeys) {
         Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(selectedClip.trackId));
         IF_ASSERT_FAILED(waveTrack) {
             continue;
@@ -431,10 +535,24 @@ muse::RetVal<ClipKeyList> Au3ClipsInteraction::moveClips(const ClipKeyList& clip
         changeClipStartTime(selectedClip, clip->GetPlayStartTime() + timePositionOffset, completed);
     }
 
-    if (trackPositionOffset != 0) {
+    ClipKeyList movedAudioKeys = audioKeys;
+    if (trackPositionOffset != 0 && !audioKeys.empty()) {
         // Update m_moveClipsNeedsDownmixing only when moving up/down
-        m_moveClipsNeedsDownmixing = moveSelectedClipsUpOrDown(newClipKeyList, trackPositionOffset) == NeedsDownmixing::Yes;
+        m_moveClipsNeedsDownmixing = moveSelectedClipsUpOrDown(movedAudioKeys, trackPositionOffset) == NeedsDownmixing::Yes;
         clipsMovedToOtherTracks = true;
+    }
+
+    newClipKeyList = mergeMovedClipKeys(clipKeyList, audioKeys, movedAudioKeys);
+
+    if (!auxiliaryKeys.empty()) {
+        bool auxiliaryMovedToOtherTracks = false;
+        muse::RetVal<ClipKeyList> auxiliaryResult = auxiliaryTrackProvider()->moveClips(auxiliaryKeys, timePositionOffset, 0, completed,
+                                                                                        auxiliaryMovedToOtherTracks);
+        if (!auxiliaryResult.ret) {
+            return auxiliaryResult;
+        }
+
+        newClipKeyList = mergeMovedClipKeys(newClipKeyList, auxiliaryKeys, auxiliaryResult.val);
     }
 
     if (!completed) {
@@ -633,6 +751,10 @@ bool Au3ClipsInteraction::duplicateClips(const ClipKeyList& clipKeyList)
 
 ITrackDataPtr Au3ClipsInteraction::clipSplitCut(const ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return nullptr;
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return nullptr;
@@ -657,6 +779,10 @@ ITrackDataPtr Au3ClipsInteraction::clipSplitCut(const ClipKey& clipKey)
 
 bool Au3ClipsInteraction::clipSplitDelete(const ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return auxiliaryTrackProvider()->removeClips({ clipKey }, false);
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -700,18 +826,13 @@ std::optional<secs_t> Au3ClipsInteraction::leftmostClipStartTime(const ClipKeyLi
 {
     std::optional<secs_t> leftmostStartTime;
     for (const auto& selectedClip : clipKeys) {
-        Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(selectedClip.trackId));
-        IF_ASSERT_FAILED(waveTrack) {
+        const secs_t startTime = clipStartTime(selectedClip);
+        if (startTime < 0.0) {
             continue;
         }
 
-        std::shared_ptr<Au3WaveClip> clip = DomAccessor::findWaveClip(waveTrack, selectedClip.itemId);
-        IF_ASSERT_FAILED(clip) {
-            continue;
-        }
-
-        if (!leftmostStartTime.has_value() || !muse::RealIsEqualOrMore(clip->GetPlayStartTime(), leftmostStartTime.value())) {
-            leftmostStartTime = clip->GetPlayStartTime();
+        if (!leftmostStartTime.has_value() || !muse::RealIsEqualOrMore(startTime, leftmostStartTime.value())) {
+            leftmostStartTime = startTime;
         }
     }
 
@@ -720,6 +841,10 @@ std::optional<secs_t> Au3ClipsInteraction::leftmostClipStartTime(const ClipKeyLi
 
 muse::Ret Au3ClipsInteraction::makeRoomForClip(const ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return muse::make_ret(muse::Ret::Code::Ok);
+    }
+
     trackedit::ITrackeditProjectPtr prj = globalContext()->currentTrackeditProject();
 
     WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), ::TrackId(clipKey.trackId));
@@ -762,6 +887,10 @@ bool Au3ClipsInteraction::noPlayRegionsOverlap(const trackedit::TrackId& trackId
 
 ClipKeyList Au3ClipsInteraction::clipsOnTrack(const TrackId trackId)
 {
+    if (auxiliaryTrackProvider() && auxiliaryTrackProvider()->hasTrack(trackId)) {
+        return auxiliaryTrackProvider()->clipsOnTrack(trackId);
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(trackId));
 
     IF_ASSERT_FAILED(waveTrack) {
@@ -780,6 +909,10 @@ ClipKeyList Au3ClipsInteraction::clipsOnTrack(const TrackId trackId)
 
 bool Au3ClipsInteraction::toggleStretchToMatchProjectTempo(const ClipKey& clipKey)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return false;
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -811,6 +944,10 @@ bool Au3ClipsInteraction::toggleStretchToMatchProjectTempo(const ClipKey& clipKe
 
 int64_t Au3ClipsInteraction::clipGroupId(const ClipKey& clipKey) const
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return auxiliaryTrackProvider()->clipGroupId(clipKey);
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return -1.0;
@@ -826,6 +963,11 @@ int64_t Au3ClipsInteraction::clipGroupId(const ClipKey& clipKey) const
 
 void Au3ClipsInteraction::setClipGroupId(const ClipKey& clipKey, int64_t id)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        auxiliaryTrackProvider()->setClipGroupId(clipKey, id);
+        return;
+    }
+
     Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return;
@@ -1029,17 +1171,12 @@ std::optional<secs_t> Au3ClipsInteraction::shortestClipDuration(const ClipKeyLis
 {
     std::optional<secs_t> shortestClipDuration;
     for (const auto& selectedClip : clipKeys) {
-        Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(selectedClip.trackId));
-        IF_ASSERT_FAILED(waveTrack) {
+        const secs_t duration = clipDuration(selectedClip);
+        if (duration < 0.0) {
             continue;
         }
-
-        std::shared_ptr<Au3WaveClip> clip = DomAccessor::findWaveClip(waveTrack, selectedClip.itemId);
-        IF_ASSERT_FAILED(clip) {
-            continue;
-        }
-        if (!shortestClipDuration.has_value() || !muse::RealIsEqualOrMore(clip->GetPlayDuration(), shortestClipDuration.value())) {
-            shortestClipDuration = clip->GetPlayDuration();
+        if (!shortestClipDuration.has_value() || !muse::RealIsEqualOrMore(duration, shortestClipDuration.value())) {
+            shortestClipDuration = duration;
         }
     }
 
@@ -1049,6 +1186,10 @@ std::optional<secs_t> Au3ClipsInteraction::shortestClipDuration(const ClipKeyLis
 bool Au3ClipsInteraction::anyLeftFullyUntrimmed(const ClipKeyList& clipKeys) const
 {
     for (const auto& selectedClip : clipKeys) {
+        if (isAuxiliaryClip(auxiliaryTrackProvider(), selectedClip)) {
+            continue;
+        }
+
         Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(selectedClip.trackId));
         IF_ASSERT_FAILED(waveTrack) {
             continue;
@@ -1069,6 +1210,10 @@ bool Au3ClipsInteraction::anyLeftFullyUntrimmed(const ClipKeyList& clipKeys) con
 bool Au3ClipsInteraction::anyRightFullyUntrimmed(const ClipKeyList& clipKeys) const
 {
     for (const auto& selectedClip : clipKeys) {
+        if (isAuxiliaryClip(auxiliaryTrackProvider(), selectedClip)) {
+            continue;
+        }
+
         Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(selectedClip.trackId));
         IF_ASSERT_FAILED(waveTrack) {
             continue;
@@ -1103,6 +1248,10 @@ secs_t Au3ClipsInteraction::clampLeftTrimDelta(const ClipKeyList& clipKeys,
     if (clipKeys.size() == 1) {
         //! NOTE hover handle single clip trim
         ClipKey selectedClip = clipKeys.front();
+        if (isAuxiliaryClip(auxiliaryTrackProvider(), selectedClip)) {
+            return deltaSec;
+        }
+
         Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(selectedClip.trackId));
         IF_ASSERT_FAILED(waveTrack) {
             return 0.0;
@@ -1155,6 +1304,10 @@ secs_t Au3ClipsInteraction::clampRightTrimDelta(const ClipKeyList& clipKeys,
     if (clipKeys.size() == 1) {
         //! NOTE hover handle single clip trim
         ClipKey selectedClip = clipKeys.front();
+        if (isAuxiliaryClip(auxiliaryTrackProvider(), selectedClip)) {
+            return deltaSec;
+        }
+
         Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(selectedClip.trackId));
         IF_ASSERT_FAILED(waveTrack) {
             return 0.0;
@@ -1228,11 +1381,19 @@ secs_t Au3ClipsInteraction::clampRightStretchDelta(const ClipKeyList& clipKeys,
 }
 
 bool Au3ClipsInteraction::applyClipEdit(const ClipKeyList& clipKeys, bool completed,
+                                        const std::function<bool(const ClipKeyList&)>& auxiliaryEdit,
                                         const std::function<bool(Au3WaveClip&)>& edit)
 {
+    const ClipKeyList auxiliaryKeys = filterAuxiliaryClips(auxiliaryTrackProvider(), clipKeys, true);
+    const ClipKeyList audioKeys = filterAuxiliaryClips(auxiliaryTrackProvider(), clipKeys, false);
+
     bool ok = false;
+    if (!auxiliaryKeys.empty() && auxiliaryEdit) {
+        ok = auxiliaryEdit(auxiliaryKeys);
+    }
+
     const trackedit::ITrackeditProjectPtr prj = globalContext()->currentTrackeditProject();
-    for (const auto& selectedClip : clipKeys) {
+    for (const auto& selectedClip : audioKeys) {
         Au3WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), Au3TrackId(selectedClip.trackId));
         IF_ASSERT_FAILED(waveTrack) {
             return false;
@@ -1250,7 +1411,10 @@ bool Au3ClipsInteraction::applyClipEdit(const ClipKeyList& clipKeys, bool comple
         //! NOTE: make room AFTER the edit: overlapping clips are admitted as a transient
         //! state, but must be "de-overlapped" once the edit is complete.
         if (completed) {
-            makeRoomForClip(selectedClip);
+            auto roomOk = makeRoomForClip(selectedClip);
+            if (!roomOk) {
+                return false;
+            }
         }
 
         clipGainInteraction()->clipGainChanged().send(selectedClip, completed);
@@ -1261,14 +1425,18 @@ bool Au3ClipsInteraction::applyClipEdit(const ClipKeyList& clipKeys, bool comple
 
 bool Au3ClipsInteraction::trimClipsLeft(const ClipKeyList& clipKeys, secs_t deltaSec, bool completed)
 {
-    return applyClipEdit(clipKeys, completed, [deltaSec](Au3WaveClip& clip) {
+    return applyClipEdit(clipKeys, completed, [this, deltaSec, completed](const ClipKeyList& auxiliaryKeys) {
+        return auxiliaryTrackProvider()->trimClipsLeft(auxiliaryKeys, deltaSec, 0.0, completed);
+    }, [deltaSec](Au3WaveClip& clip) {
         return clip.TrimLeft(deltaSec);
     });
 }
 
 bool Au3ClipsInteraction::trimClipsRight(const ClipKeyList& clipKeys, secs_t deltaSec, bool completed)
 {
-    return applyClipEdit(clipKeys, completed, [deltaSec](Au3WaveClip& clip) {
+    return applyClipEdit(clipKeys, completed, [this, deltaSec, completed](const ClipKeyList& auxiliaryKeys) {
+        return auxiliaryTrackProvider()->trimClipsRight(auxiliaryKeys, deltaSec, 0.0, completed);
+    }, [deltaSec](Au3WaveClip& clip) {
         return clip.TrimRight(deltaSec);
     });
 }
@@ -1276,7 +1444,9 @@ bool Au3ClipsInteraction::trimClipsRight(const ClipKeyList& clipKeys, secs_t del
 bool Au3ClipsInteraction::stretchClipsLeft(const ClipKeyList& clipKeys, secs_t deltaSec, secs_t minClipDuration, bool completed)
 {
     const secs_t adjustedDelta = clampLeftStretchDelta(clipKeys, deltaSec, minClipDuration);
-    return applyClipEdit(clipKeys, completed, [adjustedDelta](Au3WaveClip& clip) {
+    return applyClipEdit(clipKeys, completed, [this, adjustedDelta, minClipDuration, completed](const ClipKeyList& auxiliaryKeys) {
+        return auxiliaryTrackProvider()->stretchClipsLeft(auxiliaryKeys, adjustedDelta, minClipDuration, completed);
+    }, [adjustedDelta](Au3WaveClip& clip) {
         clip.StretchLeftTo(clip.GetPlayStartTime() + adjustedDelta);
         return true;
     });
@@ -1285,7 +1455,9 @@ bool Au3ClipsInteraction::stretchClipsLeft(const ClipKeyList& clipKeys, secs_t d
 bool Au3ClipsInteraction::stretchClipsRight(const ClipKeyList& clipKeys, secs_t deltaSec, secs_t minClipDuration, bool completed)
 {
     const secs_t adjustedDelta = clampRightStretchDelta(clipKeys, deltaSec, minClipDuration);
-    return applyClipEdit(clipKeys, completed, [adjustedDelta](Au3WaveClip& clip) {
+    return applyClipEdit(clipKeys, completed, [this, adjustedDelta, minClipDuration, completed](const ClipKeyList& auxiliaryKeys) {
+        return auxiliaryTrackProvider()->stretchClipsRight(auxiliaryKeys, adjustedDelta, minClipDuration, completed);
+    }, [adjustedDelta](Au3WaveClip& clip) {
         clip.StretchRightTo(clip.GetPlayEndTime() - adjustedDelta);
         return true;
     });
@@ -1293,6 +1465,10 @@ bool Au3ClipsInteraction::stretchClipsRight(const ClipKeyList& clipKeys, secs_t 
 
 bool Au3ClipsInteraction::doChangeClipSpeed(const ClipKey& clipKey, double speed)
 {
+    if (isAuxiliaryClip(auxiliaryTrackProvider(), clipKey)) {
+        return false;
+    }
+
     WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), ::TrackId(clipKey.trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;
@@ -1376,6 +1552,10 @@ bool Au3ClipsInteraction::userIsOkWithDownmixing() const
 
 bool Au3ClipsInteraction::singleClipOnTrack(const TrackId trackId) const
 {
+    if (auxiliaryTrackProvider() && auxiliaryTrackProvider()->hasTrack(trackId)) {
+        return auxiliaryTrackProvider()->singleClipOnTrack(trackId);
+    }
+
     WaveTrack* waveTrack = DomAccessor::findWaveTrack(projectRef(), ::TrackId(trackId));
     IF_ASSERT_FAILED(waveTrack) {
         return false;

@@ -30,6 +30,7 @@ import Audacity.AppShell
 import Audacity.ProjectScene
 import Audacity.Playback
 import Audacity.TrackEdit
+import Audacity.VideoPreview
 
 DockPage {
     id: root
@@ -127,6 +128,8 @@ DockPage {
     }
 
     readonly property int verticalPanelDefaultWidth: 281
+
+    readonly property int videoPreviewPanelDefaultHeight: 260
 
     readonly property int horizontalPanelMinHeight: 100
     readonly property int horizontalPanelMaxHeight: 520
@@ -452,6 +455,38 @@ DockPage {
 
                 navigationSection: projectBinPanel.navigationSection
                 navigationOrderStart: projectBinPanel.contentNavigationPanelOrderStart
+            }
+        },
+        DockPanel {
+            id: videoPreviewPanel
+
+            objectName: root.pageModel.videoPreviewPanelName()
+            title: qsTrc("appshell", "Video monitor")
+
+            navigationSection: root.navigationPanelSec(videoPreviewPanel.location)
+
+            readonly property bool horizontalDock: location === Location.Top || location === Location.Bottom
+
+            width: horizontalDock ? root.width : root.verticalPanelDefaultWidth
+            minimumWidth: horizontalDock ? 300 : root.verticalPanelDefaultWidth
+            maximumWidth: horizontalDock ? 100000 : root.verticalPanelDefaultWidth
+
+            height: horizontalDock ? root.videoPreviewPanelDefaultHeight : root.height
+            minimumHeight: horizontalDock ? root.horizontalPanelMinHeight : 83
+            maximumHeight: horizontalDock ? root.horizontalPanelMaxHeight : 100000
+
+            groupName: horizontalDock ? root.horizontalPanelsGroup : root.verticalPanelsGroup
+            location: Location.Top
+
+            visible: pageModel.videoEditingWorkspace
+
+            dropDestinations: root.verticalPanelDropDestinations.concat(root.horizontalPanelDropDestinations)
+
+            VideoPreviewPanel {
+                id: videoPreviewContent
+
+                navigationSection: videoPreviewPanel.navigationSection
+                navigationOrderStart: videoPreviewPanel.contentNavigationPanelOrderStart
             }
         }
     ]

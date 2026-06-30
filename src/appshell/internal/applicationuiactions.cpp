@@ -283,6 +283,7 @@ const QMap<muse::actions::ActionCode, DockName>& ApplicationUiActions::toggleDoc
         { "toggle-tracks", TRACKS_PANEL_NAME },
         { "toggle-project-bin", PROJECT_BIN_PANEL_NAME },
         { "toggle-history", HISTORY_PANEL_NAME },
+        { "toggle-video-preview", VIDEO_PREVIEW_PANEL_NAME },
 
         { "toggle-statusbar", PROJECT_STATUSBAR_NAME },
     };

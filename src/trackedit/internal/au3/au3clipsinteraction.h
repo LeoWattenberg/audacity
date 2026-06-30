@@ -13,6 +13,7 @@
 #include "trackedit/itrackeditconfiguration.h"
 #include "trackedit/iprojecthistory.h"
 #include "trackedit/itracksinteraction.h"
+#include "trackedit/iauxiliarytrackprovider.h"
 #include "automation/iclipgaininteraction.h"
 
 #include "au3wrap/au3types.h"
@@ -35,6 +36,7 @@ class Au3ClipsInteraction : public IClipsInteraction, public muse::Contextable
     muse::ContextInject<muse::IInteractive> interactive{ this };
     muse::ContextInject<ITracksInteraction> tracksInteraction{ this };
     muse::ContextInject<automation::IClipGainInteraction> clipGainInteraction{ this };
+    muse::ContextInject<IAuxiliaryTrackProvider> auxiliaryTrackProvider{ this };
 
 public:
     Au3ClipsInteraction(const muse::modularity::ContextPtr& ctx);
@@ -120,7 +122,8 @@ private:
     bool trimClipsRight(const ClipKeyList& clipKeys, secs_t deltaSec, bool completed);
 
     //! Returns the @p edit result for the last clip.
-    bool applyClipEdit(const ClipKeyList& clipKeys, bool completed, const std::function<bool(au3::Au3WaveClip&)>& edit);
+    bool applyClipEdit(const ClipKeyList& clipKeys, bool completed, const std::function<bool(const ClipKeyList&)>& auxiliaryEdit,
+                       const std::function<bool(au3::Au3WaveClip&)>& edit);
 
     bool doChangeClipSpeed(const ClipKey& clipKey, double speed);
 

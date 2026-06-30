@@ -89,6 +89,16 @@ Rectangle {
         function updateGuidelineVisibility() {
             root.guidelineVisible = root.guidelinePos >= 0
         }
+
+        function updateHoveredTrackAtPosition(x, y) {
+            const trackId = tracksViewState.trackAtPosition(x, y)
+            root.hoveredTrackId = trackId
+
+            if (trackId !== -1) {
+                root.hoveredTrackHeight = tracksViewState.trackHeight(trackId)
+                root.hoveredTrackVerticalPosition = tracksViewState.trackVerticalPosition(trackId)
+            }
+        }
     }
 
     PlaybackStateModel {
@@ -185,7 +195,7 @@ Rectangle {
         id: splitToolController
         context: timeline.context
 
-        clipHovered: root.itemHovered && !root.itemHeaderHovered
+        clipHovered: (root.itemHovered && (!root.itemHeaderHovered || active)) || (active && root.hoveredTrackId !== -1)
         hoveredTrack: root.hoveredTrackId
 
         onActiveChanged: {
@@ -558,7 +568,11 @@ Rectangle {
                 }
 
                 if (e.button === Qt.LeftButton) {
-                    if (root.itemHeaderHovered) {
+                    if (splitToolController.active) {
+                        prv.updateHoveredTrackAtPosition(e.x, e.y)
+                    }
+
+                    if (root.itemHeaderHovered && !splitToolController.active) {
                         tracksItemsView.itemStartEditRequested(root.hoveredItemKey)
                         root.interactionState = TracksItemsView.State.DraggingItem
                         lastItemClickKey = root.hoveredItemKey
@@ -597,6 +611,9 @@ Rectangle {
 
             onPositionChanged: function (e) {
                 timeline.updateCursorPosition(e.x, e.y)
+                if (splitToolController.active) {
+                    prv.updateHoveredTrackAtPosition(e.x, e.y)
+                }
                 splitToolController.mouseMove(e.x)
 
                 if (root.interactionState === TracksItemsView.State.DraggingItem && !itemWasMoved) {
@@ -612,7 +629,6 @@ Rectangle {
                     tracksItemsView.startAutoScroll()
                 } else {
                     selectionViewController.onPositionChanged(e.x, e.y)
-                    let trackId = tracksViewState.trackAtPosition(e.x, e.y)
 
                     snapGuidelineToPosition(e.x)
                 }
@@ -637,6 +653,9 @@ Rectangle {
                     tracksItemsView.itemEndEditRequested(lastItemClickKey)
                     lastItemClickKey = null
                 } else {
+                    if (splitToolController.active) {
+                        prv.updateHoveredTrackAtPosition(e.x, e.y)
+                    }
                     splitToolController.mouseUp(e.x)
 
                     if (selectionViewController.isLeftSelection(e.x)) {
@@ -887,6 +906,7 @@ Rectangle {
                             canvas: content
 
                             trackId: itemData.trackId
+                            trackType: itemData.trackType
                             trackTitle: itemData.trackTitle
                             trackColor: itemData.color
                             headerHeight: prv.headerHeight
@@ -901,7 +921,7 @@ Rectangle {
                             isMultiSelectionActive: itemData.isMultiSelectionActive
                             isTrackAudible: itemData.isTrackAudible
                             dbRange: itemData.dbRange
-                            isAutomationEnabled: itemData.isAutomationEnabled
+                            isAutomationEnabled: itemData.trackType === TrackType.VIDEO ? false : itemData.isAutomationEnabled
                             isWaveformViewVisible: itemData.isWaveformViewVisible
                             isSpectrogramViewVisible: itemData.isSpectrogramViewVisible
 
