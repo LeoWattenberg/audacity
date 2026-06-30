@@ -46,6 +46,8 @@
 using namespace au::projectscene;
 using namespace au::au3;
 
+namespace trackedit = au::trackedit;
+
 namespace {
 constexpr int PREVIEW_IMAGE_WIDTH = 480;
 constexpr int PREVIEW_IMAGE_HEIGHT = 270;
@@ -253,7 +255,7 @@ private:
         }
 
         for (auto pTrack : m_currentTracks->Any<WaveTrack>()) {
-            pTrack->LinkConsistencyFix();
+            pTrack->LinkConsistencyFix(true);
         }
 
         m_currentItem->trackData.clear();
