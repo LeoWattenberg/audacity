@@ -36,6 +36,8 @@
 #include "au3-track/Track.h"
 #include "au3-wave-track/WaveClip.h"
 #include "au3-wave-track/WaveTrack.h"
+#include "au3-xml/XMLTagHandler.h"
+#include "au3-xml/XMLWriter.h"
 #include "au3wrap/au3types.h"
 #include "au3wrap/internal/domaccessor.h"
 #include "log.h"
@@ -116,6 +118,192 @@ TransportSequences makePreviewTransportTracks(TrackList& trackList)
 
     return result;
 }
+
+wxString qStringToWxString(const QString& string)
+{
+    return wxString::FromUTF8(string.toUtf8().constData());
+}
+
+QString wxStringToQString(const wxString& string)
+{
+    return QString::fromStdWString(string.ToStdWstring());
+}
+
+class ProjectBinAttachment final : public ClientData::Base, public XMLTagHandler
+{
+public:
+    explicit ProjectBinAttachment(AudacityProject& project)
+        : m_project(project)
+    {
+    }
+
+    std::vector<ProjectBinItem> items;
+
+    bool HandleXMLTag(const std::string_view& tag, const AttributesList& attrs) override
+    {
+        if (tag == "projectbin") {
+            items.clear();
+            m_currentItem = nullptr;
+            m_currentTracks.reset();
+            return true;
+        }
+
+        if (tag != "projectbinitem") {
+            return false;
+        }
+
+        items.emplace_back();
+        m_currentItem = &items.back();
+        m_currentTracks.reset();
+
+        for (const auto& pair : attrs) {
+            const auto& attr = pair.first;
+            const auto& value = pair.second;
+
+            if (attr == "source") {
+                m_currentItem->sourceType = value.ToString() == "trackdata"
+                                            ? ProjectBinItem::SourceType::TrackData
+                                            : ProjectBinItem::SourceType::FileReference;
+            } else if (attr == "title") {
+                m_currentItem->title = wxStringToQString(value.ToWString());
+            } else if (attr == "path") {
+                m_currentItem->path = muse::io::path_t(wxStringToQString(value.ToWString()));
+            } else if (attr == "duration") {
+                m_currentItem->duration = value.Get<double>(m_currentItem->duration);
+            } else if (attr == "trackCount") {
+                m_currentItem->trackCount = value.Get<int>(m_currentItem->trackCount);
+            }
+        }
+
+        if (m_currentItem->sourceType == ProjectBinItem::SourceType::TrackData) {
+            m_currentTracks = TrackList::Temporary(&m_project);
+        }
+
+        return true;
+    }
+
+    XMLTagHandler* HandleXMLChild(const std::string_view& tag) override
+    {
+        if (tag == "projectbinitem") {
+            return this;
+        }
+
+        if (tag != "wavetrack" || !m_currentItem
+            || m_currentItem->sourceType != ProjectBinItem::SourceType::TrackData) {
+            return nullptr;
+        }
+
+        if (!m_currentTracks) {
+            m_currentTracks = TrackList::Temporary(&m_project);
+        }
+
+        auto track = WaveTrackFactory::Get(m_project).Create();
+        m_currentTracks->Add(track, TrackList::DoAssignId::No, TrackList::EventPublicationSynchrony::Synchronous);
+        return track.get();
+    }
+
+    void HandleXMLEndTag(const std::string_view& tag) override
+    {
+        if (tag != "projectbinitem") {
+            return;
+        }
+
+        finalizeTrackDataItem();
+        m_currentItem = nullptr;
+        m_currentTracks.reset();
+    }
+
+    void WriteXML(XMLWriter& xmlFile) const
+    {
+        if (items.empty()) {
+            return;
+        }
+
+        xmlFile.StartTag(wxT("projectbin"));
+
+        for (const ProjectBinItem& item : items) {
+            xmlFile.StartTag(wxT("projectbinitem"));
+            xmlFile.WriteAttr(wxT("source"), item.sourceType == ProjectBinItem::SourceType::TrackData
+                              ? wxT("trackdata") : wxT("file"));
+            xmlFile.WriteAttr(wxT("title"), qStringToWxString(item.title));
+            xmlFile.WriteAttr(wxT("path"), qStringToWxString(item.path.toQString()));
+            xmlFile.WriteAttr(wxT("duration"), item.duration);
+            xmlFile.WriteAttr(wxT("trackCount"), item.trackCount);
+
+            if (item.sourceType == ProjectBinItem::SourceType::TrackData) {
+                for (const trackedit::ITrackDataPtr& trackData : item.trackData) {
+                    const auto au3TrackData = std::dynamic_pointer_cast<trackedit::Au3TrackData>(trackData);
+                    if (au3TrackData && au3TrackData->track()) {
+                        au3TrackData->track()->WriteXML(xmlFile);
+                    }
+                }
+            }
+
+            xmlFile.EndTag(wxT("projectbinitem"));
+        }
+
+        xmlFile.EndTag(wxT("projectbin"));
+    }
+
+private:
+    void finalizeTrackDataItem()
+    {
+        if (!m_currentItem || m_currentItem->sourceType != ProjectBinItem::SourceType::TrackData || !m_currentTracks) {
+            return;
+        }
+
+        for (auto pTrack : m_currentTracks->Any<WaveTrack>()) {
+            pTrack->LinkConsistencyFix();
+        }
+
+        m_currentItem->trackData.clear();
+        while (!m_currentTracks->empty()) {
+            std::shared_ptr<Track> track = m_currentTracks->DetachFirst();
+            if (track) {
+                m_currentItem->trackData.push_back(std::make_shared<trackedit::Au3TrackData>(std::move(track)));
+            }
+        }
+
+        if (!m_currentItem->trackData.empty()) {
+            m_currentItem->trackCount = static_cast<int>(m_currentItem->trackData.size());
+        }
+    }
+
+    AudacityProject& m_project;
+    ProjectBinItem* m_currentItem = nullptr;
+    TrackListHolder m_currentTracks;
+};
+
+static const AudacityProject::AttachedObjects::RegisteredFactory projectBinAttachmentKey {
+    [](AudacityProject& project) {
+        return std::make_shared<ProjectBinAttachment>(project);
+    }
+};
+
+ProjectBinAttachment& projectBinAttachment(AudacityProject& project)
+{
+    return project.AttachedObjects::Get<ProjectBinAttachment>(projectBinAttachmentKey);
+}
+
+const ProjectBinAttachment& projectBinAttachment(const AudacityProject& project)
+{
+    return projectBinAttachment(const_cast<AudacityProject&>(project));
+}
+
+static ProjectFileIORegistry::ObjectReaderEntry projectBinReaderEntry {
+    "projectbin",
+    [](AudacityProject& project) {
+        ProjectBinAttachment& attachment = projectBinAttachment(project);
+        attachment.items.clear();
+        return &attachment;
+    }
+};
+
+static ProjectFileIORegistry::ObjectWriterEntry projectBinWriterEntry {
+    [](const AudacityProject& project, XMLWriter& xmlFile) {
+        projectBinAttachment(project).WriteXML(xmlFile);
+    }
+};
 }
 
 ProjectBin::ProjectBin(const muse::modularity::ContextPtr& ctx)
@@ -154,11 +342,8 @@ void ProjectBin::init()
     globalContext()->currentProjectChanged().onNotify(this, [this] {
         stopPreview();
         clearPreviewTracks();
-        if (m_items.empty()) {
-            return;
-        }
-
         m_items.clear();
+        loadFromProjectAttachment();
         m_itemsChanged.notify();
     });
 }
@@ -215,7 +400,9 @@ void ProjectBin::addFiles(const QStringList& fileUrls)
     }
 
     if (changed) {
+        syncToProjectAttachment();
         m_itemsChanged.notify();
+        projectHistory()->markUnsaved();
     }
 }
 
@@ -247,6 +434,7 @@ bool ProjectBin::moveClipToBin(const trackedit::ClipKey& clipKey)
     item.trackData.push_back(std::move(data));
 
     m_items.push_back(std::move(item));
+    syncToProjectAttachment();
     m_itemsChanged.notify();
 
     projectHistory()->pushHistoryState("Moved clip to project bin", "Project Bin");
@@ -334,6 +522,7 @@ bool ProjectBin::renameItem(int index, const QString& title)
     }
 
     item->title = trimmed;
+    markProjectBinChanged();
     m_itemsChanged.notify();
     return true;
 }
@@ -345,6 +534,7 @@ bool ProjectBin::removeItem(int index)
     }
 
     m_items.erase(m_items.begin() + index);
+    markProjectBinChanged();
     m_itemsChanged.notify();
     return true;
 }
@@ -408,6 +598,7 @@ bool ProjectBin::locateMissingReference(int index)
 
     item->path = muse::io::path_t(candidate);
     item->previewImage = renderFilePreview(item->path, item->duration);
+    markProjectBinChanged();
     m_itemsChanged.notify();
     return true;
 }
@@ -687,6 +878,54 @@ void ProjectBin::addInstances(ProjectBinItem& item, const trackedit::ClipKeyList
 
     item.instanceKeys.insert(item.instanceKeys.end(), added.begin(), added.end());
     m_itemsChanged.notify();
+}
+
+void ProjectBin::loadFromProjectAttachment()
+{
+    const project::IAudacityProjectPtr project = globalContext()->currentProject();
+    if (!project) {
+        return;
+    }
+
+    Au3Project* au3Project = reinterpret_cast<Au3Project*>(project->au3ProjectPtr());
+    m_items = projectBinAttachment(*au3Project).items;
+
+    for (ProjectBinItem& item : m_items) {
+        if (item.sourceType == ProjectBinItem::SourceType::FileReference) {
+            item.previewImage = renderFilePreview(item.path, item.duration);
+            continue;
+        }
+
+        std::vector<std::shared_ptr<Track> > tracks;
+        tracks.reserve(item.trackData.size());
+        for (const trackedit::ITrackDataPtr& trackData : item.trackData) {
+            const auto au3TrackData = std::dynamic_pointer_cast<trackedit::Au3TrackData>(trackData);
+            if (au3TrackData && au3TrackData->track()) {
+                tracks.push_back(au3TrackData->track());
+            }
+        }
+
+        item.previewImage = renderTrackPreview(tracks, item.duration);
+    }
+}
+
+void ProjectBin::syncToProjectAttachment() const
+{
+    const project::IAudacityProjectPtr project = globalContext()->currentProject();
+    if (!project) {
+        return;
+    }
+
+    Au3Project* au3Project = reinterpret_cast<Au3Project*>(project->au3ProjectPtr());
+    projectBinAttachment(*au3Project).items = m_items;
+}
+
+void ProjectBin::markProjectBinChanged()
+{
+    syncToProjectAttachment();
+    if (globalContext()->currentProject()) {
+        projectHistory()->markUnsaved();
+    }
 }
 
 bool ProjectBin::previewTrackData(int index, const ProjectBinItem& item)

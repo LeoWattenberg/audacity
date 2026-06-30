@@ -72,6 +72,10 @@ private:
     trackedit::ClipKeyList liveInstanceKeys(const ProjectBinItem& item) const;
     void addInstances(ProjectBinItem& item, const trackedit::ClipKeyList& before);
 
+    void loadFromProjectAttachment();
+    void syncToProjectAttachment() const;
+    void markProjectBinChanged();
+
     bool previewTrackData(int index, const ProjectBinItem& item);
     bool previewFileReference(int index, const ProjectBinItem& item);
     bool playPreviewTracks(int index, const std::shared_ptr<TrackList>& tracks, double endTime);
