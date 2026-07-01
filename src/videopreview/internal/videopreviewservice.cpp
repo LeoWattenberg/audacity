@@ -55,6 +55,17 @@ double sourceAtProjectTime(const VideoSegment& segment, double projectTime)
     return segment.sourceStart + normalized * sourceDuration;
 }
 
+double sourceDeltaForProjectDelta(const VideoSegment& segment, double projectDelta)
+{
+    const double projectDuration = duration(segment.projectStart, segment.projectEnd);
+    const double sourceDuration = duration(segment.sourceStart, segment.sourceEnd);
+    if (projectDuration <= EPS || sourceDuration <= EPS) {
+        return projectDelta;
+    }
+
+    return projectDelta * sourceDuration / projectDuration;
+}
+
 au::trackedit::TrackItemId nextSegmentId(const std::vector<VideoSegment>& segments)
 {
     au::trackedit::TrackItemId next = FIRST_VIDEO_SEGMENT_ID;
@@ -1156,8 +1167,12 @@ bool VideoPreviewService::trimClipsLeft(const au::trackedit::ClipKeyList& clipKe
             if (segment.projectStart + delta < 0.0) {
                 delta = -segment.projectStart;
             }
-            if (segment.sourceStart + delta < 0.0) {
-                delta = -segment.sourceStart;
+            double sourceDelta = sourceDeltaForProjectDelta(segment, delta);
+            if (segment.sourceStart + sourceDelta < 0.0) {
+                sourceDelta = -segment.sourceStart;
+                const double sourceDuration = duration(segment.sourceStart, segment.sourceEnd);
+                const double projectDuration = duration(segment.projectStart, segment.projectEnd);
+                delta = sourceDuration > EPS ? sourceDelta * projectDuration / sourceDuration : sourceDelta;
             }
 
             if (std::abs(delta) <= EPS) {
@@ -1165,7 +1180,7 @@ bool VideoPreviewService::trimClipsLeft(const au::trackedit::ClipKeyList& clipKe
             }
 
             segment.projectStart += delta;
-            segment.sourceStart += delta;
+            segment.sourceStart += sourceDelta;
             changed = true;
         }
     }
@@ -1201,10 +1216,12 @@ bool VideoPreviewService::trimClipsRight(const au::trackedit::ClipKeyList& clipK
                 continue;
             }
 
+            const double sourceDelta = sourceDeltaForProjectDelta(segment, delta);
+            const double minimumSourceDuration = std::max(EPS, sourceDeltaForProjectDelta(segment, minimumDuration));
             segment.projectEnd -= delta;
-            segment.sourceEnd -= delta;
+            segment.sourceEnd -= sourceDelta;
             if (segment.sourceEnd <= segment.sourceStart + EPS) {
-                segment.sourceEnd = segment.sourceStart + minimumDuration;
+                segment.sourceEnd = segment.sourceStart + minimumSourceDuration;
             }
             changed = true;
         }
@@ -1382,6 +1399,8 @@ bool VideoPreviewService::removeTracksData(const au::trackedit::TrackIdList& tra
                 if (moveClips) {
                     shifted.projectStart = std::max(0.0, shifted.projectStart - removedDuration);
                     shifted.projectEnd = std::max(shifted.projectStart, shifted.projectEnd - removedDuration);
+                    changed = changed || std::abs(shifted.projectStart - segment.projectStart) > EPS
+                              || std::abs(shifted.projectEnd - segment.projectEnd) > EPS;
                 }
                 nextSegments.push_back(std::move(shifted));
                 continue;

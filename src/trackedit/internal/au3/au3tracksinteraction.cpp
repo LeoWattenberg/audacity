@@ -45,7 +45,23 @@ using namespace au::trackedit;
 using namespace au::au3;
 
 namespace {
+constexpr double SPLIT_EPS = 1e-7;
 const std::string mixingDownToMonoLabel = muse::trc("trackedit", "Mixing down to mono…");
+
+bool containsSplitPoint(const Clip& clip, const std::vector<secs_t>& pivots)
+{
+    return std::any_of(pivots.begin(), pivots.end(), [&clip](const secs_t& pivot) {
+        const double splitTime = pivot.to_double();
+        return splitTime > clip.startTime + SPLIT_EPS && splitTime < clip.endTime - SPLIT_EPS;
+    });
+}
+
+void appendUniqueTrackId(TrackIdList& ids, TrackId trackId)
+{
+    if (!muse::contains(ids, trackId)) {
+        ids.push_back(trackId);
+    }
+}
 }
 
 Au3TracksInteraction::Au3TracksInteraction(const muse::modularity::ContextPtr& ctx)
@@ -580,10 +596,43 @@ bool Au3TracksInteraction::splitTracksAt(const TrackIdList& tracksIds, std::vect
     ClipKeyList splitClipKeys;
     bool ok = true;
     bool didAnyTrackSplit = false;
+    TrackIdList splitTrackIds = tracksIds;
+
+    if (auxiliaryTrackProvider() && clipsInteraction() && prj) {
+        for (const TrackId trackId : tracksIds) {
+            if (!auxiliaryTrackProvider()->hasTrack(trackId)) {
+                continue;
+            }
+
+            const muse::async::NotifyList<Clip> videoClips = auxiliaryTrackProvider()->clipList(trackId);
+            for (const Clip& videoClip : videoClips) {
+                if (!containsSplitPoint(videoClip, pivots)) {
+                    continue;
+                }
+
+                const int64_t groupId = clipsInteraction()->clipGroupId(videoClip.key);
+                if (groupId == -1) {
+                    continue;
+                }
+
+                const ClipKeyList groupedClips = clipsInteraction()->clipsInGroup(groupId);
+                for (const ClipKey& groupedClipKey : groupedClips) {
+                    if (auxiliaryTrackProvider()->hasClip(groupedClipKey)) {
+                        continue;
+                    }
+
+                    const Clip groupedClip = prj->clip(groupedClipKey);
+                    if (groupedClip.isValid() && containsSplitPoint(groupedClip, pivots)) {
+                        appendUniqueTrackId(splitTrackIds, groupedClip.key.trackId);
+                    }
+                }
+            }
+        }
+    }
 
     TrackIdList auxiliaryTrackIds;
     if (auxiliaryTrackProvider()) {
-        std::copy_if(tracksIds.begin(), tracksIds.end(), std::back_inserter(auxiliaryTrackIds), [this](TrackId trackId) {
+        std::copy_if(splitTrackIds.begin(), splitTrackIds.end(), std::back_inserter(auxiliaryTrackIds), [this](TrackId trackId) {
             return auxiliaryTrackProvider()->hasTrack(trackId);
         });
     }
@@ -592,7 +641,7 @@ bool Au3TracksInteraction::splitTracksAt(const TrackIdList& tracksIds, std::vect
         didAnyTrackSplit = auxiliaryTrackProvider()->splitTracksAt(auxiliaryTrackIds, pivots) || didAnyTrackSplit;
     }
 
-    for (const auto& trackId : tracksIds) {
+    for (const auto& trackId : splitTrackIds) {
         if (auxiliaryTrackProvider() && auxiliaryTrackProvider()->hasTrack(trackId)) {
             continue;
         }
