@@ -148,6 +148,38 @@ void VideoClipThumbnailsItem::setProjectEnd(double projectEnd)
     scheduleReload();
 }
 
+double VideoClipThumbnailsItem::visibleStart() const
+{
+    return m_visibleStart;
+}
+
+void VideoClipThumbnailsItem::setVisibleStart(double visibleStart)
+{
+    if (std::abs(m_visibleStart - visibleStart) <= EPS) {
+        return;
+    }
+
+    m_visibleStart = visibleStart;
+    emit clipChanged();
+    scheduleReload();
+}
+
+double VideoClipThumbnailsItem::visibleEnd() const
+{
+    return m_visibleEnd;
+}
+
+void VideoClipThumbnailsItem::setVisibleEnd(double visibleEnd)
+{
+    if (std::abs(m_visibleEnd - visibleEnd) <= EPS) {
+        return;
+    }
+
+    m_visibleEnd = visibleEnd;
+    emit clipChanged();
+    scheduleReload();
+}
+
 void VideoClipThumbnailsItem::scheduleReload()
 {
     if (!m_inited || !service()) {
@@ -164,7 +196,8 @@ void VideoClipThumbnailsItem::scheduleReload()
 
 void VideoClipThumbnailsItem::reload()
 {
-    if (!service() || m_trackId == -1 || m_itemId == -1 || duration(m_projectStart, m_projectEnd) <= EPS) {
+    if (!service() || m_trackId == -1 || m_itemId == -1
+        || duration(m_projectStart, m_projectEnd) <= EPS || duration(m_visibleStart, m_visibleEnd) <= EPS) {
         setThumbnails(++m_generation, {});
         return;
     }
@@ -179,23 +212,30 @@ void VideoClipThumbnailsItem::reload()
     const uint64_t generation = m_generation.load();
     const VideoLink link = match->first;
     const VideoSegment segment = match->second;
-    const double projectStart = std::max(m_projectStart, segment.projectStart);
-    const double projectEnd = std::min(m_projectEnd, segment.projectEnd);
+    const double projectStart = std::max({ m_projectStart, m_visibleStart, segment.projectStart });
+    const double projectEnd = std::min({ m_projectEnd, m_visibleEnd, segment.projectEnd });
     QPointer<VideoClipThumbnailsItem> self(this);
 
     std::thread([self, generation, link, segment, projectStart, projectEnd]() {
         std::vector<Thumbnail> thumbnails;
-        for (double projectTime = projectStart; projectTime < projectEnd - EPS; projectTime += THUMBNAIL_INTERVAL_SECONDS) {
+        const double intervalOffset = std::fmod(projectStart - segment.projectStart, THUMBNAIL_INTERVAL_SECONDS);
+        double tileStart = projectStart;
+        if (intervalOffset > EPS) {
+            tileStart -= intervalOffset;
+        }
+
+        for (double projectTime = tileStart; projectTime < projectEnd - EPS; projectTime += THUMBNAIL_INTERVAL_SECONDS) {
+            const double visibleTileStart = std::max(projectTime, projectStart);
             const double tileEnd = std::min(projectTime + THUMBNAIL_INTERVAL_SECONDS, projectEnd);
             VideoDecodeResult result = FFmpegVideoDecoder::decodeFrame(
                 link.sourcePath,
                 link.streamIndex,
                 link.streamId,
-                sourceAtProjectTime(segment, projectTime));
+                sourceAtProjectTime(segment, visibleTileStart));
 
             if (result.isUsable()) {
                 thumbnails.push_back(Thumbnail {
-                    projectTime,
+                    visibleTileStart,
                     tileEnd,
                     std::move(result.frame)
                 });
@@ -238,8 +278,8 @@ void VideoClipThumbnailsItem::paint(QPainter* painter)
         thumbnails = m_thumbnails;
     }
 
-    const double clipDuration = duration(m_projectStart, m_projectEnd);
-    if (clipDuration <= EPS || thumbnails.empty()) {
+    const double visibleDuration = duration(m_visibleStart, m_visibleEnd);
+    if (visibleDuration <= EPS || thumbnails.empty()) {
         painter->fillRect(boundingRect(), QColor(245, 245, 245, 32));
         return;
     }
@@ -250,10 +290,14 @@ void VideoClipThumbnailsItem::paint(QPainter* painter)
             continue;
         }
 
-        const double left = (thumbnail.projectStart - m_projectStart) / clipDuration * boundingRect().width();
-        const double right = (thumbnail.projectEnd - m_projectStart) / clipDuration * boundingRect().width();
-        const QRectF tileRect(left, 0.0, std::max(1.0, right - left), boundingRect().height());
-        painter->drawImage(tileRect, thumbnail.frame);
-        painter->fillRect(QRectF(tileRect.right() - 1.0, 0.0, 1.0, tileRect.height()), QColor(0, 0, 0, 80));
+        const double left = (thumbnail.projectStart - m_visibleStart) / visibleDuration * boundingRect().width();
+        const double right = (thumbnail.projectEnd - m_visibleStart) / visibleDuration * boundingRect().width();
+        const double tileWidth = std::max(1.0, right - left);
+        const double naturalWidth = boundingRect().height() > EPS && thumbnail.frame.height() > 0
+                                    ? boundingRect().height() * thumbnail.frame.width() / thumbnail.frame.height()
+                                    : tileWidth;
+        const QRectF imageRect(left, 0.0, std::min(tileWidth, naturalWidth), boundingRect().height());
+        painter->drawImage(imageRect, thumbnail.frame);
+        painter->fillRect(QRectF(imageRect.right() - 1.0, 0.0, 1.0, imageRect.height()), QColor(0, 0, 0, 80));
     }
 }

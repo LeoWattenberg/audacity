@@ -870,6 +870,8 @@ Rectangle {
             itemId: root.clipKey ? root.clipKey.itemId() : -1
             projectStart: root.clipTime ? root.clipTime.startTime : 0
             projectEnd: root.clipTime ? root.clipTime.endTime : 0
+            visibleStart: root.clipTime ? root.clipTime.itemStartTime : 0
+            visibleEnd: root.clipTime ? root.clipTime.itemEndTime : 0
 
             Component.onCompleted: init()
         }

@@ -24,6 +24,8 @@ class VideoClipThumbnailsItem : public QQuickPaintedItem, public muse::async::As
     Q_PROPERTY(QVariant itemId READ itemId WRITE setItemId NOTIFY clipChanged FINAL)
     Q_PROPERTY(double projectStart READ projectStart WRITE setProjectStart NOTIFY clipChanged FINAL)
     Q_PROPERTY(double projectEnd READ projectEnd WRITE setProjectEnd NOTIFY clipChanged FINAL)
+    Q_PROPERTY(double visibleStart READ visibleStart WRITE setVisibleStart NOTIFY clipChanged FINAL)
+    Q_PROPERTY(double visibleEnd READ visibleEnd WRITE setVisibleEnd NOTIFY clipChanged FINAL)
 
     muse::ContextInject<IVideoPreviewService> service{ this };
 
@@ -44,6 +46,12 @@ public:
 
     double projectEnd() const;
     void setProjectEnd(double projectEnd);
+
+    double visibleStart() const;
+    void setVisibleStart(double visibleStart);
+
+    double visibleEnd() const;
+    void setVisibleEnd(double visibleEnd);
 
     void paint(QPainter* painter) override;
 
@@ -66,6 +74,8 @@ private:
     int64_t m_itemId = -1;
     double m_projectStart = 0.0;
     double m_projectEnd = 0.0;
+    double m_visibleStart = 0.0;
+    double m_visibleEnd = 0.0;
     bool m_inited = false;
     std::atomic<uint64_t> m_generation { 0 };
 
