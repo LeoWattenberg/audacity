@@ -5,10 +5,12 @@
 
 #include <QAbstractListModel>
 
+#include "actions/actionable.h"
 #include "async/asyncable.h"
 #include "modularity/ioc.h"
 #include "projectscene/iprojectbin.h"
 #include "projectscene/types/projectscenetypes.h"
+#include "uicomponents/qml/Muse/UiComponents/abstractmenumodel.h"
 
 namespace au::projectscene {
 class ProjectBinModel : public QAbstractListModel, public muse::Contextable, public muse::async::Asyncable
@@ -62,6 +64,33 @@ private:
     QString durationText(double duration) const;
     void reload();
 
+    bool m_inited = false;
+};
+
+class ProjectBinMenuModel : public muse::uicomponents::AbstractMenuModel, public muse::actions::Actionable
+{
+    Q_OBJECT
+
+    Q_PROPERTY(int viewMode READ viewMode WRITE setViewMode NOTIFY viewModeChanged FINAL)
+
+public:
+    explicit ProjectBinMenuModel(QObject* parent = nullptr);
+
+    Q_INVOKABLE void init();
+
+    int viewMode() const;
+    void setViewMode(int viewMode);
+
+    void load() override;
+    Q_INVOKABLE void handleMenuItem(const QString& itemId) override;
+
+signals:
+    void viewModeChanged();
+
+private:
+    muse::uicomponents::MenuItem* makeViewModeItem(const QString& itemId, const muse::TranslatableString& title, int viewMode);
+
+    int m_viewMode = 0;
     bool m_inited = false;
 };
 }

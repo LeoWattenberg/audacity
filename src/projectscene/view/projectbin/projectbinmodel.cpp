@@ -6,9 +6,23 @@
 #include <algorithm>
 #include <cmath>
 
+#include "actions/actiontypes.h"
 #include "log.h"
+#include "types/translatablestring.h"
+#include "ui/uitypes.h"
 
 using namespace au::projectscene;
+using namespace muse::uicomponents;
+
+namespace {
+constexpr int THUMBNAIL_VIEW_MODE = 0;
+constexpr int COMPACT_VIEW_MODE = 1;
+constexpr int LIST_VIEW_MODE = 2;
+
+const QString THUMBNAIL_VIEW_MODE_ITEM_ID("projectbin-view-thumbnail");
+const QString COMPACT_VIEW_MODE_ITEM_ID("projectbin-view-compact");
+const QString LIST_VIEW_MODE_ITEM_ID("projectbin-view-list");
+}
 
 ProjectBinModel::ProjectBinModel(QObject* parent)
     : QAbstractListModel(parent), muse::Contextable(muse::iocCtxForQmlObject(this))
@@ -221,4 +235,94 @@ void ProjectBinModel::reload()
     endResetModel();
 
     emit countChanged();
+}
+
+ProjectBinMenuModel::ProjectBinMenuModel(QObject* parent)
+    : AbstractMenuModel(parent)
+{
+}
+
+void ProjectBinMenuModel::init()
+{
+    if (m_inited) {
+        return;
+    }
+
+    dispatcher()->reg(this, muse::actions::codeFromQString(THUMBNAIL_VIEW_MODE_ITEM_ID), [this]() {
+        setViewMode(THUMBNAIL_VIEW_MODE);
+    });
+    dispatcher()->reg(this, muse::actions::codeFromQString(COMPACT_VIEW_MODE_ITEM_ID), [this]() {
+        setViewMode(COMPACT_VIEW_MODE);
+    });
+    dispatcher()->reg(this, muse::actions::codeFromQString(LIST_VIEW_MODE_ITEM_ID), [this]() {
+        setViewMode(LIST_VIEW_MODE);
+    });
+
+    m_inited = true;
+}
+
+int ProjectBinMenuModel::viewMode() const
+{
+    return m_viewMode;
+}
+
+void ProjectBinMenuModel::setViewMode(int viewMode)
+{
+    if (m_viewMode == viewMode) {
+        return;
+    }
+
+    m_viewMode = viewMode;
+    emit viewModeChanged();
+    load();
+}
+
+void ProjectBinMenuModel::load()
+{
+    MenuItemList items {
+        makeViewModeItem(THUMBNAIL_VIEW_MODE_ITEM_ID, muse::TranslatableString("projectbin", "Thumbnail"), THUMBNAIL_VIEW_MODE),
+        makeViewModeItem(COMPACT_VIEW_MODE_ITEM_ID, muse::TranslatableString("projectbin", "Compact"), COMPACT_VIEW_MODE),
+        makeViewModeItem(LIST_VIEW_MODE_ITEM_ID, muse::TranslatableString("projectbin", "List"), LIST_VIEW_MODE)
+    };
+
+    setItems(items);
+}
+
+void ProjectBinMenuModel::handleMenuItem(const QString& itemId)
+{
+    if (itemId == THUMBNAIL_VIEW_MODE_ITEM_ID) {
+        setViewMode(THUMBNAIL_VIEW_MODE);
+        return;
+    }
+
+    if (itemId == COMPACT_VIEW_MODE_ITEM_ID) {
+        setViewMode(COMPACT_VIEW_MODE);
+        return;
+    }
+
+    if (itemId == LIST_VIEW_MODE_ITEM_ID) {
+        setViewMode(LIST_VIEW_MODE);
+        return;
+    }
+
+    AbstractMenuModel::handleMenuItem(itemId);
+}
+
+MenuItem* ProjectBinMenuModel::makeViewModeItem(const QString& itemId, const muse::TranslatableString& title, int viewMode)
+{
+    MenuItem* item = new MenuItem(this);
+    item->setId(itemId);
+
+    muse::ui::UiAction action;
+    action.code = muse::actions::codeFromQString(itemId);
+    action.title = title;
+    item->setAction(action);
+    item->setCheckable(true);
+
+    muse::ui::UiActionState state;
+    state.enabled = true;
+    state.checked = m_viewMode == viewMode;
+    item->setState(state);
+
+    return item;
 }

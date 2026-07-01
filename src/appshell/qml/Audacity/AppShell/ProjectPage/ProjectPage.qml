@@ -134,8 +134,7 @@ DockPage {
     readonly property int horizontalPanelMinHeight: 100
     readonly property int horizontalPanelMaxHeight: 520
 
-    readonly property string verticalPanelsGroup: "VERTICAL_PANELS"
-    readonly property string horizontalPanelsGroup: "HORIZONTAL_PANELS"
+    readonly property string dockablePanelsGroup: "DOCKABLE_PANELS"
 
     readonly property var verticalPanelDropDestinations: [
         {
@@ -150,7 +149,7 @@ DockPage {
         }
     ]
 
-    readonly property var horizontalPanelDropDestinations: [root.panelTopDropDestination, root.panelBottomDropDestination]
+    readonly property var dockablePanelDropDestinations: root.verticalPanelDropDestinations.concat([root.panelTopDropDestination, root.panelRightDropDestination, root.panelBottomDropDestination])
 
     mainToolBars: [
         DockToolBar {
@@ -412,7 +411,7 @@ DockPage {
             minimumWidth: root.verticalPanelDefaultWidth
             maximumWidth: root.verticalPanelDefaultWidth
 
-            groupName: root.verticalPanelsGroup
+            groupName: root.dockablePanelsGroup
             location: Location.Right
 
             //! NOTE: hidden by default
@@ -435,7 +434,7 @@ DockPage {
 
             readonly property bool horizontalDock: location === Location.Top || location === Location.Bottom
 
-            width: horizontalDock ? root.width : root.verticalPanelDefaultWidth
+            width: horizontalDock ? (pageModel.videoEditingWorkspace ? Math.max(root.verticalPanelDefaultWidth, root.width / 2) : root.width) : root.verticalPanelDefaultWidth
             minimumWidth: horizontalDock ? 100 : root.verticalPanelDefaultWidth
             maximumWidth: horizontalDock ? 100000 : root.verticalPanelDefaultWidth
 
@@ -443,12 +442,13 @@ DockPage {
             minimumHeight: horizontalDock ? root.horizontalPanelMinHeight : 83
             maximumHeight: horizontalDock ? root.horizontalPanelMaxHeight : 100000
 
-            groupName: horizontalDock ? root.horizontalPanelsGroup : root.verticalPanelsGroup
-            location: Location.Right
+            groupName: root.dockablePanelsGroup
+            location: pageModel.videoEditingWorkspace ? Location.Top : Location.Right
 
             visible: true
 
-            dropDestinations: root.verticalPanelDropDestinations.concat(root.horizontalPanelDropDestinations)
+            dropDestinations: root.dockablePanelDropDestinations
+            contextMenuModel: projectBinContent.contextMenuModel
 
             ProjectBinPanel {
                 id: projectBinContent
@@ -467,7 +467,7 @@ DockPage {
 
             readonly property bool horizontalDock: location === Location.Top || location === Location.Bottom
 
-            width: horizontalDock ? root.width : root.verticalPanelDefaultWidth
+            width: horizontalDock ? (pageModel.videoEditingWorkspace ? Math.max(300, root.width / 2) : root.width) : root.verticalPanelDefaultWidth
             minimumWidth: horizontalDock ? 300 : root.verticalPanelDefaultWidth
             maximumWidth: horizontalDock ? 100000 : root.verticalPanelDefaultWidth
 
@@ -475,12 +475,12 @@ DockPage {
             minimumHeight: horizontalDock ? root.horizontalPanelMinHeight : 83
             maximumHeight: horizontalDock ? root.horizontalPanelMaxHeight : 100000
 
-            groupName: horizontalDock ? root.horizontalPanelsGroup : root.verticalPanelsGroup
+            groupName: root.dockablePanelsGroup
             location: Location.Top
 
             visible: pageModel.videoEditingWorkspace
 
-            dropDestinations: root.verticalPanelDropDestinations.concat(root.horizontalPanelDropDestinations)
+            dropDestinations: root.dockablePanelDropDestinations
 
             VideoPreviewPanel {
                 id: videoPreviewContent

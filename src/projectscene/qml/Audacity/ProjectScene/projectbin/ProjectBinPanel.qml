@@ -18,6 +18,7 @@ Item {
 
     property alias navigationSection: navPanel.section
     property alias navigationOrderStart: navPanel.order
+    property alias contextMenuModel: projectBinMenuModel
 
     property int viewMode: ProjectBinPanel.Thumbnail
 
@@ -34,54 +35,26 @@ Item {
         Component.onCompleted: init()
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 0
+    ProjectBinMenuModel {
+        id: projectBinMenuModel
 
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 42
+        viewMode: root.viewMode
 
-            color: ui.theme.backgroundPrimaryColor
-            border.width: ui.theme.borderWidth
-            border.color: ui.theme.strokeColor
-
-            RadioButtonGroup {
-                id: viewModeButtons
-
-                anchors.fill: parent
-                anchors.margins: 6
-
-                model: [
-                    {
-                        "title": qsTrc("projectbin", "Thumbnail"),
-                        "mode": ProjectBinPanel.Thumbnail
-                    },
-                    {
-                        "title": qsTrc("projectbin", "Compact"),
-                        "mode": ProjectBinPanel.Compact
-                    },
-                    {
-                        "title": qsTrc("projectbin", "List"),
-                        "mode": ProjectBinPanel.List
-                    }
-                ]
-
-                delegate: FlatRadioButton {
-                    text: modelData.title
-                    checked: root.viewMode === modelData.mode
-                    navigation.panel: navPanel
-                    navigation.order: index
-                    onClicked: {
-                        root.viewMode = modelData.mode
-                    }
-                }
-            }
+        onViewModeChanged: {
+            root.viewMode = viewMode
         }
 
+        Component.onCompleted: {
+            init()
+            load()
+        }
+    }
+
+    Item {
+        anchors.fill: parent
+
         Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            anchors.fill: parent
 
             StyledListView {
                 id: listView

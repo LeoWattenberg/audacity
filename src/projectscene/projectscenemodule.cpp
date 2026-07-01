@@ -217,6 +217,7 @@ void ProjectSceneModule::registerUiTypes()
 
     // project bin
     qmlRegisterType<ProjectBinModel>("Audacity.ProjectScene", 1, 0, "ProjectBinModel");
+    qmlRegisterType<ProjectBinMenuModel>("Audacity.ProjectScene", 1, 0, "ProjectBinMenuModel");
 
     //track ruler
     qmlRegisterType<TrackRulerModel>("Audacity.ProjectScene", 1, 0, "TrackRulerModel");
