@@ -56,7 +56,7 @@ bool containsSplitPoint(const Clip& clip, const std::vector<secs_t>& pivots)
     });
 }
 
-void appendUniqueTrackId(TrackIdList& ids, TrackId trackId)
+void appendUniqueTrackId(TrackIdList& ids, au::trackedit::TrackId trackId)
 {
     if (!muse::contains(ids, trackId)) {
         ids.push_back(trackId);
@@ -599,7 +599,7 @@ bool Au3TracksInteraction::splitTracksAt(const TrackIdList& tracksIds, std::vect
     TrackIdList splitTrackIds = tracksIds;
 
     if (auxiliaryTrackProvider() && clipsInteraction() && prj) {
-        for (const TrackId trackId : tracksIds) {
+        for (const au::trackedit::TrackId trackId : tracksIds) {
             if (!auxiliaryTrackProvider()->hasTrack(trackId)) {
                 continue;
             }
